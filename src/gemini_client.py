@@ -6,7 +6,7 @@ Handles file upload and content generation using Google Gemini 2.5
 import time
 import logging
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Union, Any
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
@@ -49,7 +49,7 @@ class GeminiClient:
 
         logger.info(f"Initialized GeminiClient with model: {self.model_name}")
 
-    def upload_file(self, file_path: Union[str, Path]) -> genai.File:
+    def upload_file(self, file_path: Union[str, Path]) -> Any:
         """
         Upload a file to Gemini API
 
@@ -77,7 +77,7 @@ class GeminiClient:
             logger.error(f"Error uploading file {file_path.name}: {str(e)}")
             raise
 
-    def wait_for_file_processing(self, uploaded_file: genai.File, timeout: int = 300) -> bool:
+    def wait_for_file_processing(self, uploaded_file: Any, timeout: int = 300) -> bool:
         """
         Wait for uploaded file to be processed by Gemini
 
