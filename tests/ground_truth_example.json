@@ -1,0 +1,233 @@
+[
+  {
+    "document_id": "integrated_001",
+    "certificate_type": "integrated",
+    "documents": [
+      {
+        "file_name": "application_form.pdf",
+        "document_type": "Application Form",
+        "quality_level": "clean",
+        "ground_truth_fields": {
+          "Full name of the Applicant": "Ramesh Kumar",
+          "Father's Name": "Suresh Kumar",
+          "Mother's Name": "Lakshmi Devi",
+          "Date of Birth": "15/08/1995",
+          "Gender": "Male",
+          "Address": "H.No. 12-34, Street 5, Jubilee Hills, Hyderabad, Telangana - 500033",
+          "Phone Number": "9876543210",
+          "Email": "ramesh.kumar@email.com",
+          "Ration Card Number": "AP-HYD-123456789",
+          "Aadhaar Number": "1234 5678 9012",
+          "Community": "OBC",
+          "Sub-Caste": "Yadav",
+          "Religion": "Hindu",
+          "Annual Income": "2,50,000"
+        }
+      },
+      {
+        "file_name": "caste_certificate.pdf",
+        "document_type": "Caste Certificate",
+        "quality_level": "clean",
+        "ground_truth_fields": {
+          "Name": "Ramesh Kumar",
+          "Father's Name": "Suresh Kumar",
+          "Community": "OBC",
+          "Sub-Caste": "Yadav",
+          "Certificate Number": "CC/2020/12345",
+          "Date of Issue": "10/01/2020",
+          "Issuing Authority": "Tahsildar, Jubilee Hills",
+          "District": "Hyderabad"
+        }
+      },
+      {
+        "file_name": "ration_card.jpg",
+        "document_type": "Ration Card",
+        "quality_level": "medium",
+        "ground_truth_fields": {
+          "Ration Card Number": "AP-HYD-123456789",
+          "Head of Family": "Suresh Kumar",
+          "Family Members": "Ramesh Kumar, Lakshmi Devi, Priya Kumar",
+          "Address": "H.No. 12-34, Jubilee Hills, Hyderabad",
+          "Card Type": "White Card",
+          "Issue Date": "05/03/2018"
+        }
+      },
+      {
+        "file_name": "ssc_memo.pdf",
+        "document_type": "SSC Marks Memo",
+        "quality_level": "clean",
+        "ground_truth_fields": {
+          "Student Name": "Ramesh Kumar",
+          "Father's Name": "Suresh Kumar",
+          "Date of Birth": "15/08/1995",
+          "Hall Ticket Number": "1234567890",
+          "Passing Year": "2011",
+          "School Name": "Government High School, Hyderabad"
+        }
+      }
+    ],
+    "expected_summary": {
+      "Title of the document": {
+        "value": "Integrated Certificate (Community, Nativity, DOB)",
+        "source_documents": ["application_form.pdf"]
+      },
+      "Name of the Applicant": {
+        "value": "Ramesh Kumar",
+        "source_documents": ["application_form.pdf", "caste_certificate.pdf", "ssc_memo.pdf"]
+      },
+      "Father's Name": {
+        "value": "Suresh Kumar",
+        "source_documents": ["application_form.pdf", "caste_certificate.pdf", "ssc_memo.pdf"]
+      },
+      "Address": {
+        "value": "H.No. 12-34, Street 5, Jubilee Hills, Hyderabad, Telangana - 500033",
+        "source_documents": ["application_form.pdf", "ration_card.jpg"]
+      },
+      "Gender": {
+        "value": "Male",
+        "source_documents": ["application_form.pdf"]
+      },
+      "Age/DOB": {
+        "value": "15/08/1995",
+        "source_documents": ["application_form.pdf", "ssc_memo.pdf"]
+      },
+      "Phone Number": {
+        "value": "9876543210",
+        "source_documents": ["application_form.pdf"]
+      },
+      "Ration Card Number": {
+        "value": "AP-HYD-123456789",
+        "source_documents": ["application_form.pdf", "ration_card.jpg"]
+      },
+      "Community": {
+        "value": "OBC",
+        "source_documents": ["application_form.pdf", "caste_certificate.pdf"]
+      },
+      "Nativity": {
+        "value": "Hyderabad",
+        "source_documents": ["caste_certificate.pdf", "ssc_memo.pdf"]
+      },
+      "Family Income": {
+        "value": "2,50,000",
+        "source_documents": ["application_form.pdf"]
+      },
+      "Issuer of the Document/Authority Signed": {
+        "value": "Tahsildar, Jubilee Hills",
+        "source_documents": ["caste_certificate.pdf"]
+      },
+      "Date of Issue": {
+        "value": "10/01/2020",
+        "source_documents": ["caste_certificate.pdf"]
+      }
+    },
+    "metadata": {
+      "annotator": "Test Annotator",
+      "annotation_date": "2025-01-17",
+      "difficulty": "medium",
+      "notes": "Standard integrated certificate with typical documents"
+    }
+  },
+  {
+    "document_id": "income_001",
+    "certificate_type": "income",
+    "documents": [
+      {
+        "file_name": "income_application.pdf",
+        "document_type": "Application Form",
+        "quality_level": "clean",
+        "ground_truth_fields": {
+          "Full name of the Applicant": "Sita Reddy",
+          "Father's Name": "Rama Reddy",
+          "Date of Birth": "20/05/1988",
+          "Gender": "Female",
+          "Address": "Plot No. 45, MIG Colony, Kukatpally, Hyderabad - 500072",
+          "Phone Number": "9123456789",
+          "Ration Card Number": "AP-HYD-987654321",
+          "Occupation": "Self-employed (Small Business)",
+          "Purpose of Certificate": "Educational scholarship"
+        }
+      },
+      {
+        "file_name": "it_returns.pdf",
+        "document_type": "IT Returns",
+        "quality_level": "clean",
+        "ground_truth_fields": {
+          "Name": "Sita Reddy",
+          "PAN Number": "ABCDE1234F",
+          "Assessment Year": "2023-24",
+          "Gross Total Income": "1,80,000",
+          "Income from Business": "1,20,000",
+          "Income from Other Sources": "60,000",
+          "Total Income Tax Paid": "5,000"
+        }
+      }
+    ],
+    "expected_summary": {
+      "Title of the document": {
+        "value": "Income Certificate",
+        "source_documents": ["income_application.pdf"]
+      },
+      "Name of the Applicant": {
+        "value": "Sita Reddy",
+        "source_documents": ["income_application.pdf", "it_returns.pdf"]
+      },
+      "Father's Name": {
+        "value": "Rama Reddy",
+        "source_documents": ["income_application.pdf"]
+      },
+      "Address": {
+        "value": "Plot No. 45, MIG Colony, Kukatpally, Hyderabad - 500072",
+        "source_documents": ["income_application.pdf"]
+      },
+      "Gender": {
+        "value": "Female",
+        "source_documents": ["income_application.pdf"]
+      },
+      "Age/DOB": {
+        "value": "20/05/1988",
+        "source_documents": ["income_application.pdf"]
+      },
+      "Phone Number": {
+        "value": "9123456789",
+        "source_documents": ["income_application.pdf"]
+      },
+      "Ration Card Number": {
+        "value": "AP-HYD-987654321",
+        "source_documents": ["income_application.pdf"]
+      },
+      "Income Details - Income on Lands": {
+        "value": "0",
+        "source_documents": ["it_returns.pdf"]
+      },
+      "Income Details - Income on Business": {
+        "value": "1,20,000",
+        "source_documents": ["it_returns.pdf"]
+      },
+      "Income Details - Income on Buildings": {
+        "value": "0",
+        "source_documents": ["it_returns.pdf"]
+      },
+      "Income Details - Income on Labour": {
+        "value": "0",
+        "source_documents": ["it_returns.pdf"]
+      },
+      "Income Details - Salary of both Wife & Husband": {
+        "value": "0",
+        "source_documents": ["it_returns.pdf"]
+      },
+      "Income Details - Income on Other Sources": {
+        "value": "60,000",
+        "source_documents": ["it_returns.pdf"]
+      },
+      "Income Details - Total Income": {
+        "value": "1,80,000",
+        "source_documents": ["it_returns.pdf"]
+      }
+    },
+    "metadata": {
+      "annotator": "Test Annotator",
+      "annotation_date": "2025-01-17",
+      "difficulty": "easy"
+    }
+  }
+]
