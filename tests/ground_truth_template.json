@@ -1,0 +1,55 @@
+{
+  "document_id": "CHANGE_ME_unique_identifier",
+  "certificate_type": "CHANGE_ME_integrated|income|obc|ews|family_member",
+  "description": "CHANGE_ME_brief_description_of_test_case",
+
+  "documents": [
+    {
+      "file_name": "CHANGE_ME_filename.pdf",
+      "document_type": "CHANGE_ME_Application Form|Caste Certificate|etc",
+      "quality_level": "CHANGE_ME_clean|medium|challenging",
+
+      "_comment_page_metadata": "NEW FIELDS FOR MULTI-PAGE SUPPORT",
+      "page_count": 1,
+      "is_multi_page": false,
+      "contains_multiple_docs": false,
+      "expected_field_count_range": [5, 20],
+
+      "ground_truth_fields": {
+        "_INSTRUCTION": "Extract EVERY field from EVERY page. Use exact values as they appear.",
+        "Field Name 1": "Exact Value 1",
+        "Field Name 2": "Exact Value 2",
+        "Field Name 3": "Exact Value 3"
+      },
+
+      "notes": "Optional: any special notes about this document"
+    }
+  ],
+
+  "expected_summary": {
+    "_INSTRUCTION": "Define expected Stage 2 summary output",
+    "Summary Field 1": {
+      "value": "Expected Value 1",
+      "source_documents": ["filename.pdf"]
+    },
+    "Summary Field 2": {
+      "value": "Expected Value 2",
+      "source_documents": ["filename.pdf", "other_file.jpg"]
+    }
+  },
+
+  "_comment_expected_metrics": "NEW SECTION FOR VALIDATION",
+  "expected_metrics": {
+    "total_pages": 1,
+    "should_warn_multi_doc": false,
+    "minimum_field_count": 5,
+    "maximum_field_count": 20
+  },
+
+  "metadata": {
+    "annotator": "CHANGE_ME_Your Name",
+    "annotation_date": "CHANGE_ME_YYYY-MM-DD",
+    "difficulty": "CHANGE_ME_easy|medium|hard",
+    "special_considerations": []
+  }
+}

@@ -1,0 +1,305 @@
+[
+  {
+    "document_id": "multipage_bundle_integrated_001",
+    "certificate_type": "integrated",
+    "description": "7-page PDF bundle with Application Form (2pg), Caste Cert (3pg), Ration Card (2pg)",
+
+    "documents": [
+      {
+        "file_name": "integrated_bundle_7pages.pdf",
+        "document_type": "Document Bundle (Multiple Documents)",
+        "quality_level": "medium",
+
+        "page_count": 7,
+        "is_multi_page": true,
+        "contains_multiple_docs": true,
+
+        "document_breakdown": {
+          "pages_1_2": "Application Form",
+          "pages_3_5": "Caste Certificate",
+          "pages_6_7": "Ration Card"
+        },
+
+        "expected_field_count_range": [40, 70],
+
+        "ground_truth_fields": {
+          "_comment": "Prefix field names with document type for multi-document PDFs",
+
+          "Application Form - Full name of the Applicant": "Ramesh Kumar",
+          "Application Form - Father's Name": "Suresh Kumar",
+          "Application Form - Mother's Name": "Lakshmi Devi",
+          "Application Form - Date of Birth": "15/08/1995",
+          "Application Form - Age": "29 years",
+          "Application Form - Gender": "Male",
+          "Application Form - Address": "H.No. 12-34, Street 5, Jubilee Hills, Hyderabad, Telangana - 500033",
+          "Application Form - Phone Number": "9876543210",
+          "Application Form - Email": "ramesh.kumar@email.com",
+          "Application Form - Aadhaar Number": "1234 5678 9012",
+          "Application Form - Ration Card Number": "AP-HYD-123456789",
+          "Application Form - Community": "OBC",
+          "Application Form - Sub-Caste": "Yadav",
+          "Application Form - Religion": "Hindu",
+          "Application Form - Annual Family Income": "2,50,000",
+          "Application Form - Purpose": "Higher Education",
+          "Application Form - Date": "15/01/2025",
+          "Application Form - Place": "Hyderabad",
+
+          "Caste Certificate - Certificate Number": "CC/2020/12345",
+          "Caste Certificate - Name": "Ramesh Kumar",
+          "Caste Certificate - Father's Name": "Suresh Kumar",
+          "Caste Certificate - Date of Birth": "15/08/1995",
+          "Caste Certificate - Community": "OBC",
+          "Caste Certificate - Sub-Caste": "Yadav",
+          "Caste Certificate - Issuing Authority": "Tahsildar, Jubilee Hills",
+          "Caste Certificate - District": "Hyderabad",
+          "Caste Certificate - Mandal": "Serilingampally",
+          "Caste Certificate - Date of Issue": "10/01/2020",
+          "Caste Certificate - Validity": "Permanent",
+          "Caste Certificate - Office Seal": "Present",
+          "Caste Certificate - Signature": "Tahsildar",
+
+          "Ration Card - Card Number": "AP-HYD-123456789",
+          "Ration Card - Head of Family": "Suresh Kumar",
+          "Ration Card - Family Member 1": "Ramesh Kumar",
+          "Ration Card - Family Member 2": "Lakshmi Devi",
+          "Ration Card - Family Member 3": "Priya Kumar",
+          "Ration Card - Total Members": "4",
+          "Ration Card - Address": "H.No. 12-34, Jubilee Hills, Hyderabad",
+          "Ration Card - Card Type": "White Card",
+          "Ration Card - Issue Date": "05/03/2018",
+          "Ration Card - Fair Price Shop": "FPS-500033-12",
+          "Ration Card - Aadhaar Seeding": "Linked",
+          "Ration Card - Rice Quota": "6 kg per month"
+        },
+
+        "notes": "This PDF contains 3 distinct documents. System should warn about multiple documents due to >3 pages."
+      }
+    ],
+
+    "expected_summary": {
+      "Title of the document": {
+        "value": "Integrated Certificate Application",
+        "source_documents": ["integrated_bundle_7pages.pdf"]
+      },
+      "Name of the Applicant": {
+        "value": "Ramesh Kumar",
+        "source_documents": ["integrated_bundle_7pages.pdf"]
+      },
+      "Father's Name": {
+        "value": "Suresh Kumar",
+        "source_documents": ["integrated_bundle_7pages.pdf"]
+      },
+      "Address": {
+        "value": "H.No. 12-34, Street 5, Jubilee Hills, Hyderabad, Telangana - 500033",
+        "source_documents": ["integrated_bundle_7pages.pdf"]
+      },
+      "Gender": {
+        "value": "Male",
+        "source_documents": ["integrated_bundle_7pages.pdf"]
+      },
+      "Age/DOB": {
+        "value": "15/08/1995",
+        "source_documents": ["integrated_bundle_7pages.pdf"]
+      },
+      "Phone Number": {
+        "value": "9876543210",
+        "source_documents": ["integrated_bundle_7pages.pdf"]
+      },
+      "Ration Card Number": {
+        "value": "AP-HYD-123456789",
+        "source_documents": ["integrated_bundle_7pages.pdf"]
+      },
+      "Community": {
+        "value": "OBC",
+        "source_documents": ["integrated_bundle_7pages.pdf"]
+      },
+      "Nativity": {
+        "value": "Hyderabad",
+        "source_documents": ["integrated_bundle_7pages.pdf"]
+      },
+      "Family Income": {
+        "value": "2,50,000",
+        "source_documents": ["integrated_bundle_7pages.pdf"]
+      },
+      "Issuer of the Document/Authority Signed": {
+        "value": "Tahsildar, Jubilee Hills",
+        "source_documents": ["integrated_bundle_7pages.pdf"]
+      },
+      "Date of Issue": {
+        "value": "10/01/2020",
+        "source_documents": ["integrated_bundle_7pages.pdf"]
+      }
+    },
+
+    "expected_metrics": {
+      "total_pages": 7,
+      "should_warn_multi_doc": true,
+      "minimum_field_count": 40,
+      "maximum_field_count": 70,
+      "expected_warnings": [
+        "PDF has 7 pages - may contain multiple documents",
+        "High field count for multi-page PDF",
+        "Multiple document type indicators"
+      ]
+    },
+
+    "metadata": {
+      "annotator": "Test Team",
+      "annotation_date": "2025-01-17",
+      "difficulty": "hard",
+      "special_considerations": ["multi_page", "multi_document", "bundle", "3_separate_docs"]
+    }
+  },
+
+  {
+    "document_id": "multipage_single_doc_002",
+    "certificate_type": "income",
+    "description": "4-page income application form (single document across pages)",
+
+    "documents": [
+      {
+        "file_name": "income_application_4pages.pdf",
+        "document_type": "Application Form",
+        "quality_level": "clean",
+
+        "page_count": 4,
+        "is_multi_page": true,
+        "contains_multiple_docs": false,
+
+        "expected_field_count_range": [25, 40],
+
+        "ground_truth_fields": {
+          "_comment": "Single document across 4 pages - no prefix needed",
+
+          "Full name of the Applicant": "Sita Reddy",
+          "Father's Name": "Rama Reddy",
+          "Mother's Name": "Lakshmi Devi",
+          "Date of Birth": "20/05/1988",
+          "Age": "36 years",
+          "Gender": "Female",
+          "Marital Status": "Married",
+          "Spouse Name": "Krishna Reddy",
+          "Address": "Plot No. 45, MIG Colony, Kukatpally, Hyderabad - 500072",
+          "Permanent Address": "Same as above",
+          "Phone Number": "9123456789",
+          "Email": "sita.reddy@email.com",
+          "Aadhaar Number": "2345-6789-0123",
+          "Ration Card Number": "AP-HYD-987654321",
+
+          "Occupation": "Self-employed (Small Business)",
+          "Business Name": "Reddy Textiles",
+          "Business Address": "Shop No. 12, KPHB Market, Hyderabad",
+          "Business Start Date": "01/04/2015",
+
+          "Income from Lands": "0",
+          "Income from Business": "1,20,000",
+          "Income from Buildings": "0",
+          "Income from Labour": "0",
+          "Salary (Self)": "0",
+          "Salary (Spouse)": "3,60,000",
+          "Income from Other Sources": "60,000",
+          "Total Annual Income": "5,40,000",
+
+          "Purpose of Certificate": "Educational scholarship for children",
+          "Number of Dependents": "2",
+          "Dependent 1 Name": "Priya Reddy",
+          "Dependent 1 Age": "12",
+          "Dependent 2 Name": "Kiran Reddy",
+          "Dependent 2 Age": "8",
+
+          "Bank Account Number": "1234567890",
+          "Bank Name": "State Bank of India",
+          "Branch": "Kukatpally",
+          "IFSC Code": "SBIN0012345",
+
+          "Application Date": "15/01/2025",
+          "Place": "Hyderabad",
+          "Applicant Signature": "Present"
+        },
+
+        "notes": "Complete 4-page application form. All pages belong to same document. Should log multi-page but NOT warn about multiple documents."
+      }
+    ],
+
+    "expected_summary": {
+      "Title of the document": {
+        "value": "Income Certificate Application",
+        "source_documents": ["income_application_4pages.pdf"]
+      },
+      "Name of the Applicant": {
+        "value": "Sita Reddy",
+        "source_documents": ["income_application_4pages.pdf"]
+      },
+      "Father's Name": {
+        "value": "Rama Reddy",
+        "source_documents": ["income_application_4pages.pdf"]
+      },
+      "Address": {
+        "value": "Plot No. 45, MIG Colony, Kukatpally, Hyderabad - 500072",
+        "source_documents": ["income_application_4pages.pdf"]
+      },
+      "Gender": {
+        "value": "Female",
+        "source_documents": ["income_application_4pages.pdf"]
+      },
+      "Age/DOB": {
+        "value": "20/05/1988",
+        "source_documents": ["income_application_4pages.pdf"]
+      },
+      "Phone Number": {
+        "value": "9123456789",
+        "source_documents": ["income_application_4pages.pdf"]
+      },
+      "Ration Card Number": {
+        "value": "AP-HYD-987654321",
+        "source_documents": ["income_application_4pages.pdf"]
+      },
+      "Income Details - Income on Lands": {
+        "value": "0",
+        "source_documents": ["income_application_4pages.pdf"]
+      },
+      "Income Details - Income on Business": {
+        "value": "1,20,000",
+        "source_documents": ["income_application_4pages.pdf"]
+      },
+      "Income Details - Income on Buildings": {
+        "value": "0",
+        "source_documents": ["income_application_4pages.pdf"]
+      },
+      "Income Details - Income on Labour": {
+        "value": "0",
+        "source_documents": ["income_application_4pages.pdf"]
+      },
+      "Income Details - Salary of both Wife & Husband": {
+        "value": "3,60,000",
+        "source_documents": ["income_application_4pages.pdf"]
+      },
+      "Income Details - Income on Other Sources": {
+        "value": "60,000",
+        "source_documents": ["income_application_4pages.pdf"]
+      },
+      "Income Details - Total Income": {
+        "value": "5,40,000",
+        "source_documents": ["income_application_4pages.pdf"]
+      }
+    },
+
+    "expected_metrics": {
+      "total_pages": 4,
+      "should_warn_multi_doc": true,
+      "minimum_field_count": 25,
+      "maximum_field_count": 40,
+      "expected_warnings": [
+        "PDF has 4 pages - may contain multiple documents"
+      ],
+      "notes": "Should warn due to >3 pages, but this is actually a single document"
+    },
+
+    "metadata": {
+      "annotator": "Test Team",
+      "annotation_date": "2025-01-17",
+      "difficulty": "medium",
+      "special_considerations": ["multi_page", "4_pages", "single_document"]
+    }
+  }
+]
