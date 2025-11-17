@@ -67,11 +67,15 @@ class GeminiClient:
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        logger.info(f"Uploading file to Gemini: {file_path.name}")
+        # Log file information
+        file_size_mb = file_path.stat().st_size / (1024 * 1024)
+        logger.info(f"Uploading file to Gemini: {file_path.name} ({file_size_mb:.2f} MB)")
 
         try:
             uploaded_file = genai.upload_file(path=str(file_path))
-            logger.info(f"File uploaded successfully: {uploaded_file.name}")
+            logger.info(f"File uploaded successfully to Gemini: {uploaded_file.name}")
+            logger.debug(f"  → Gemini file URI: {uploaded_file.uri if hasattr(uploaded_file, 'uri') else 'N/A'}")
+            logger.debug(f"  → File state: {uploaded_file.state.name if hasattr(uploaded_file, 'state') else 'UNKNOWN'}")
             return uploaded_file
         except Exception as e:
             logger.error(f"Error uploading file {file_path.name}: {str(e)}")
@@ -93,10 +97,16 @@ class GeminiClient:
             Exception: If processing fails
         """
         start_time = time.time()
+        wait_iterations = 0
 
         while uploaded_file.state.name == "PROCESSING":
-            if time.time() - start_time > timeout:
+            elapsed = time.time() - start_time
+            if elapsed > timeout:
                 raise TimeoutError(f"File processing timeout after {timeout} seconds")
+
+            wait_iterations += 1
+            if wait_iterations % 5 == 0:  # Log every 10 seconds
+                logger.info(f"Still processing {uploaded_file.name} (elapsed: {elapsed:.0f}s)")
 
             logger.debug(f"Waiting for file processing: {uploaded_file.name}")
             time.sleep(2)
@@ -105,7 +115,7 @@ class GeminiClient:
         if uploaded_file.state.name == "FAILED":
             raise Exception(f"File processing failed: {uploaded_file.name}")
 
-        logger.info(f"File processed successfully: {uploaded_file.name}")
+        logger.info(f"File processed successfully by Gemini: {uploaded_file.name}")
         return True
 
     def generate_content_with_file(
@@ -141,12 +151,28 @@ class GeminiClient:
                     safety_settings=self.safety_settings
                 )
 
-                logger.info(f"Generating content for file: {Path(file_path).name}")
+                file_name = Path(file_path).name
+                logger.info(f"Sending to Gemini for content generation: {file_name}")
+                logger.debug(f"  → Using model: {self.model_name}")
+                logger.debug(f"  → Prompt length: {len(prompt)} chars")
+
                 response = model.generate_content([uploaded_file, prompt])
 
                 # Extract text from response
                 result = response.text
-                logger.info(f"Content generated successfully ({len(result)} chars)")
+                lines_count = len(result.split('\n'))
+                logger.info(f"✓ Content generated successfully for {file_name}")
+                logger.info(f"  → Extracted text: {len(result)} chars, {lines_count} lines")
+
+                # Check if response seems complete
+                if len(result) < 100:
+                    logger.warning(f"  ⚠ Response is unusually short - may indicate incomplete extraction")
+
+                # Log if we see multiple document indicators
+                doc_indicators = ["certificate", "form", "card", "memo", "application"]
+                indicator_count = sum(1 for ind in doc_indicators if ind.lower() in result.lower())
+                if indicator_count > 2:
+                    logger.info(f"  → Detected {indicator_count} document type indicators - may be multi-document PDF")
 
                 return result
 

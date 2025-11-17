@@ -66,6 +66,18 @@ class DocumentMetrics:
     incorrect_fields: int
     character_error_rate: Optional[float] = None
     word_error_rate: Optional[float] = None
+    # Page-level tracking for PDFs
+    page_count: Optional[int] = None
+    is_multi_page: bool = False
+    potential_multi_doc: bool = False
+    # Warnings
+    has_warnings: bool = False
+    warning_messages: List[str] = None
+
+    def __post_init__(self):
+        """Initialize mutable defaults"""
+        if self.warning_messages is None:
+            self.warning_messages = []
 
     @property
     def extraction_rate(self) -> float:
@@ -80,6 +92,13 @@ class DocumentMetrics:
         if self.extracted_fields == 0:
             return 0.0
         return self.correct_fields / self.extracted_fields
+
+    @property
+    def fields_per_page(self) -> Optional[float]:
+        """Average fields extracted per page (for PDFs)"""
+        if not self.page_count or self.page_count == 0:
+            return None
+        return self.extracted_fields / self.page_count
 
 
 @dataclass
