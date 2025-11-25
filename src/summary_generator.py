@@ -23,7 +23,9 @@ STAGE2_PROMPT_TEMPLATE = """Extract the following summary fields from ALL provid
 **Summary Fields List:**
 {summary_fields}
 
-{document_data}"""
+{document_data}
+
+**IMPORTANT:** When creating the three-column markdown table, ensure that the "Source Document(s)" column references documents by their specific names, which are provided in the document labels above (e.g., "Income Certificate.pdf", "Aadhar Card.pdf", etc.). Do not use generic references like "Document 1", "Document 2", etc. Instead, use the actual document names as shown in the labels above."""
 
 @dataclass
 class SummaryResult:
@@ -72,12 +74,46 @@ class SummaryGenerator:
         """
         sections = []
 
-        for idx, result in enumerate(extraction_results, 1):
+        for result in extraction_results:
             if not result.success:
                 logger.warning(f"Skipping failed document: {result.file_name}")
                 continue
 
-            section = f"**Document {idx}: {result.file_name}**\n{result.extracted_text}\n"
+            # Use document name/filename for identification
+            section = f"**Document: {result.file_name}**\n{result.extracted_text}\n"
+            sections.append(section)
+
+        return "\n".join(sections)
+
+    def _build_document_section_with_names(
+        self,
+        extraction_results: List[DocumentExtractionResult],
+        document_names: Optional[List[str]] = None
+    ) -> str:
+        """
+        Build document data section for Stage 2 prompt using custom document names
+
+        Args:
+            extraction_results: List of Stage 1 extraction results
+            document_names: Optional custom names for documents
+
+        Returns:
+            Formatted document data string
+        """
+        sections = []
+
+        for idx, result in enumerate(extraction_results):
+            if not result.success:
+                logger.warning(f"Skipping failed document: {result.file_name}")
+                continue
+
+            # Use custom document name if provided, otherwise use filename
+            doc_name = result.file_name  # Default to filename
+            if document_names and idx < len(document_names):
+                doc_name = document_names[idx]
+
+            # Use document name for identification
+            section = f"**Document: {doc_name}**\n{result.extracted_text}\n"
             sections.append(section)
 
         return "\n".join(sections)
@@ -124,7 +160,12 @@ class SummaryGenerator:
         try:
             # Build prompt components
             summary_fields = self._build_summary_fields_list(cert_type)
-            document_data = self._build_document_section(extraction_results)
+
+            # Use custom document names if provided, otherwise use default names
+            if document_names:
+                document_data = self._build_document_section_with_names(extraction_results, document_names)
+            else:
+                document_data = self._build_document_section(extraction_results)
 
             # Build complete prompt
             prompt = STAGE2_PROMPT_TEMPLATE.format(
