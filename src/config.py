@@ -7,6 +7,10 @@ import os
 from pathlib import Path
 from typing import Optional
 
+# Load environment variables from .env file if it exists
+from dotenv import load_dotenv
+load_dotenv()
+
 class Config:
     """Configuration class for the document validation system"""
 
