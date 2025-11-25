@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
-from config import Config
+from src.config import Config
 
 def setup_logging(
     log_level: Optional[str] = None,

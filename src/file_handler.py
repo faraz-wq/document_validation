@@ -11,7 +11,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 import logging
 
-from config import Config
+from src.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ class FileMetadata:
     file_hash: str
     upload_timestamp: str
     document_id: str
+    page_count: Optional[int] = None  # Added for PDF files
 
     def to_dict(self) -> Dict:
         """Convert metadata to dictionary"""
@@ -124,6 +125,17 @@ class FileHandler:
         file_stat = file_path.stat()
         mime_type, _ = mimetypes.guess_type(str(file_path))
 
+        # Determine page count for PDF files
+        page_count = None
+        if cls.is_pdf(file_path):
+            try:
+                import PyPDF2
+                with open(file_path, 'rb') as pdf_file:
+                    reader = PyPDF2.PdfReader(pdf_file)
+                    page_count = len(reader.pages)
+            except Exception as e:
+                logger.warning(f"Could not determine page count for PDF {file_path.name}: {e}")
+
         metadata = FileMetadata(
             file_path=str(file_path.absolute()),
             file_name=file_path.name,
@@ -132,10 +144,11 @@ class FileHandler:
             mime_type=mime_type,
             file_hash=cls.calculate_file_hash(file_path),
             upload_timestamp=datetime.now().isoformat(),
-            document_id=cls.generate_document_id(file_path)
+            document_id=cls.generate_document_id(file_path),
+            page_count=page_count
         )
 
-        logger.info(f"Extracted metadata for: {file_path.name}")
+        logger.info(f"Extracted metadata for: {file_path.name} (Page count: {page_count})")
         return metadata
 
     @staticmethod

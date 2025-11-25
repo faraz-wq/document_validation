@@ -9,13 +9,18 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from config import Config
-from certificate_types import CertificateType, CertificateSpecs
-from gemini_client import GeminiClient
-from document_processor import DocumentProcessor
-from summary_generator import SummaryGenerator
-from file_handler import FileHandler
-from utils import (
+# Add src directory to path to allow imports
+import os
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from src.config import Config
+from src.certificate_types import CertificateType, CertificateSpecs
+from src.gemini_client import GeminiClient
+from src.document_processor import DocumentProcessor
+from src.summary_generator import SummaryGenerator
+from src.file_handler import FileHandler
+from src.utils import (
     setup_logging,
     print_banner,
     print_section,
@@ -91,6 +96,9 @@ class DocumentValidationWorkflow:
                 "success": False,
                 "stage1_results": stage1_results,
                 "stage2_result": None,
+                "certificate_type": cert_type.value,
+                "documents_processed": len(successful_docs),
+                "documents_failed": len(failed_docs),
                 "error": "All documents failed to process"
             }
 

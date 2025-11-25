@@ -10,7 +10,7 @@ from typing import Optional, Union, Any
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
-from config import Config
+from src.config import Config
 
 logger = logging.getLogger(__name__)
 

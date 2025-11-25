@@ -10,10 +10,10 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass, asdict
 from datetime import datetime
 
-from gemini_client import GeminiClient
-from certificate_types import CertificateType, CertificateSpecs
-from document_processor import DocumentExtractionResult
-from config import Config
+from src.gemini_client import GeminiClient
+from src.certificate_types import CertificateType, CertificateSpecs
+from src.document_processor import DocumentExtractionResult
+from src.config import Config
 
 logger = logging.getLogger(__name__)
 
