@@ -19,7 +19,7 @@ class Config:
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
     # Generation Configuration
-    TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.1"))
+    TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.0"))
     TOP_P: float = float(os.getenv("TOP_P", "0.95"))
     TOP_K: int = int(os.getenv("TOP_K", "40"))
     MAX_OUTPUT_TOKENS: int = int(os.getenv("MAX_OUTPUT_TOKENS", "8192"))

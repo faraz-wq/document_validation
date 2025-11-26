@@ -147,6 +147,12 @@ class GeminiClient:
                 # Extract text from response
                 result = response.text
                 logger.info(f"Content generated successfully ({len(result)} chars)")
+                
+                # Development logging: Log full LLM output
+                logger.debug(f"LLM RAW OUTPUT START [{file_path.name}]")
+                for line in result.split('\n'):
+                    logger.debug(f"LLM: {line}")
+                logger.debug(f"LLM RAW OUTPUT END [{file_path.name}]")
 
                 return result
 

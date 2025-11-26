@@ -184,6 +184,22 @@ class FormTemplateMatcher:
                 best_template = template
         
         return (best_template, best_confidence) if best_template else None
+
+    def get_template_by_name(self, name_query: str) -> Optional[FormTemplate]:
+        """
+        Find a template by name (fuzzy match)
+        
+        Args:
+            name_query: Name to search for (e.g. "Income Certificate")
+            
+        Returns:
+            Matching FormTemplate or None
+        """
+        name_query = name_query.lower()
+        for name, template in self.templates.items():
+            if name in name_query or template.name.lower() in name_query:
+                return template
+        return None
     
     def extract_from_template(self, text: str, template: FormTemplate) -> Dict[str, str]:
         """
@@ -354,3 +370,51 @@ class FormTemplateMatcher:
             return "Medium"
         else:
             return "Low"
+
+    def perform_accuracy_validation(self, extracted_text: str) -> Dict[str, any]:
+        """
+        Perform accuracy validation on extracted text
+        
+        Args:
+            extracted_text: The extracted text to validate
+            
+        Returns:
+            Dictionary with accuracy metrics
+        """
+        issues = []
+        fields = self._parse_extracted_text_to_dict(extracted_text)
+        total_fields = len(fields)
+        
+        if total_fields == 0:
+            return {
+                'accuracy_score': 0.0,
+                'issue_count': 1,
+                'validation_issues': [{'issue': 'no_fields_extracted', 'description': 'No fields were extracted'}]
+            }
+            
+        # Check for placeholder values
+        placeholder_values = ['(not specified)', '(illegible)', 'not specified', 'illegible', 'unknown', 'n/a']
+        placeholder_count = 0
+        
+        for name, value in fields.items():
+            if value.lower() in placeholder_values:
+                placeholder_count += 1
+                
+        placeholder_rate = placeholder_count / total_fields
+        
+        if placeholder_rate > 0.5:
+            issues.append({
+                'issue': 'high_placeholder_rate', 
+                'description': f'High rate of missing/illegible values ({placeholder_rate:.0%})'
+            })
+            
+        # Calculate score (simple heuristic)
+        accuracy_score = 1.0 - (placeholder_rate * 0.5)
+        if not fields:
+            accuracy_score = 0.0
+            
+        return {
+            'accuracy_score': accuracy_score,
+            'issue_count': len(issues),
+            'validation_issues': issues
+        }

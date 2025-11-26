@@ -20,201 +20,48 @@ logger = logging.getLogger(__name__)
 # Enhanced Stage 1 Prompts - Multi-step field extraction approach
 
 # Initial comprehensive extraction prompt
-STAGE1_FULL_DOCUMENT_PROMPT = """You are a precise document digitization specialist. Your task is to extract ALL data from the uploaded document with maximum completeness. Follow these steps:
+# Exhaustive Extraction Prompt with Context Optimization support
+EXHAUSTIVE_EXTRACTION_PROMPT = """You are a document digitization expert. Your goal is to extract EVERY single piece of information from this document with 100% accuracy.
 
-**STEP 1: Initial Scanning**
-First, provide a brief overview of all content visible on the document (1-2 sentences).
+Rules:
+1. Extract ALL text, labels, values, headers, footers, table data, and handwritten notes.
+2. Maintain the original structure and hierarchy where possible.
+3. For every field found, output it in the format: "Field Name: [Value]"
+4. If a value is missing or illegible, write "(Not specified)" or "(Illegible)".
+5. Do not summarize. Do not leave out any details, no matter how small.
+6. For tables, extract each cell with a descriptive key indicating its row/column or header.
+7. Capture all checkmarks, radio buttons, and selections (e.g., "Selection: Yes").
 
-**STEP 2: Systematic Field Extraction**
-Extract ALL possible fields using this exact format for each field:
-- "Field Name: [Value]" (one per line, with blank line separation)
-- Include ALL visible elements: text, checkmarks, checkboxes, radio buttons, signatures, stamps, headers, tables, etc.
-- For missing/difficult-to-read values, write "(Not specified)" or "Partially visible: [what can be read]"
-
-**STEP 3: Validation Check**
-Double-check that you have captured:
-- All name fields (applicant, father, mother, spouse, etc.)
-- All date fields (DOB, issue dates, etc.)
-- All address-related fields
-- All financial fields (income, assets, etc.)
-- All categorical fields (caste, community, etc.)
-- All identification numbers (Aadhar, ration card, etc.)
-- All signatures and stamps
-- All checkmarks and selections
-
-**OUTPUT FORMAT:**
-Field Name: [Value]
-
-Field Name: [Value]
-
-(Blank line between each entry)
-
-**EXAMPLE:**
-Document Title: Income Certificate Application
-
-Applicant Full Name: [Name]
-
-Father's Name: [Father's Name]
-
-Date of Birth: [DOB]
-
-Gender: [Gender]
-
-Annual Income: [Amount]
-
-Signature Authority: [Signature details]
-
-Selection Checkmark Yes: [X if checked, or "Not selected"]
-
-Table Data Row 1 Column 1: [Value]"""
-
-# Detailed field-specific extraction prompts for iterative processing
-NAME_EXTRACTION_PROMPT = """Extract ALL name-related fields from this document. Provide output in key-value format with blank lines between entries:
-
-Examples of name fields to look for:
-- Applicant's name, full name, surname
-- Father's name, mother's name, spouse name, children names
-- Guardian name, nominee name
-- Authorizing official name, issuing authority
-- Witness names, referee names
+{context_instructions}
 
 Output Format:
 Field Name: [Value]
 
 Field Name: [Value]
+...
+"""
 
-(Blank line between each entry)"""
-
-DATE_EXTRACTION_PROMPT = """Extract ALL date-related fields from this document. Provide output in key-value format with blank lines between entries:
-
-Examples of date fields to look for:
-- Date of birth, issue date, expiry date
-- Application date, renewal date, registration date
-- Employment start date, marriage date
-- Any other date fields with DD/MM/YYYY, MM/DD/YYYY, or YYYY-MM-DD formats
-
-Output Format:
-Field Name: [Date Value]
-
-Field Name: [Date Value]
-
-(Blank line between each entry)"""
-
-FINANCIAL_EXTRACTION_PROMPT = """Extract ALL financial and income-related fields from this document. Provide output in key-value format with blank lines between entries:
-
-Examples of financial fields to look for:
-- Salary, wages, income amounts
-- Tax paid, deductions, net income
-- Assets value, property value, vehicle value
-- Bank account numbers, financial account details
-- Amounts in any currency format
-
-Output Format:
-Field Name: [Amount/Value]
-
-Field Name: [Amount/Value]
-
-(Blank line between each entry)"""
-
-IDENTIFICATION_EXTRACTION_PROMPT = """Extract ALL identification and number fields from this document. Provide output in key-value format with blank lines between entries:
-
-Examples of identification fields to look for:
-- Aadhar number, PAN number, voter ID
-- Ration card number, driving license
-- Passport number, employee ID, student ID
-- Account numbers, registration numbers
-- Certificate numbers, serial numbers
-
-Output Format:
-Field Name: [Number/ID]
-
-Field Name: [Number/ID]
-
-(Blank line between each entry)"""
-
-CHECKMARK_EXTRACTION_PROMPT = """Extract ALL checkmarks, checkboxes, radio buttons, and selection indicators from this document. Provide output in key-value format with blank lines between entries:
-
-For each checkmark/selection, provide:
-- The associated field/option name
-- Whether it's selected or not
-- The context of what is being selected
-
-Output Format:
-Field Name Selection: [Selected/Not selected/difficult to determine]
-Option Available: [List of options]
-Selection Detail: [What's specifically selected]
-
-(Blank line between each entry)"""
-
-TABLE_EXTRACTION_PROMPT = """Extract ALL table data from this document. For each table, provide data in a structured key-value format with blank lines between entries:
-
-For each table cell, create a field name that includes row/column position:
-- Example: "Table_1_Row_2_Col_3_Description: [Value]"
-- Include header row values as context
-- If table spans multiple pages, note the continuation
-
-Output Format:
-Table_Field_Name: [Value]
-
-Table_Field_Name: [Value]
-
-(Blank line between each entry)"""
-
-def get_page_specific_prompt(page_num: int) -> str:
+def get_page_specific_prompt(page_num: int, context_instructions: str = "") -> str:
     """
-    Get a prompt specifically for a given page number to ensure comprehensive extraction
-
-    Args:
-        page_num: The page number being processed
-
-    Returns:
-        A specialized prompt for the given page
+    Get a prompt specifically for a given page number with context optimization
     """
-    return f"""You are tasked with digitizing and extracting ALL data from page {page_num} of an uploaded document. Follow these strict formatting rules for the output:
+    return f"""You are tasked with digitizing and extracting ALL data from page {page_num} of an uploaded document.
+    
+{context_instructions}
 
-1. **Format:** Output the data using simple "key: value" text, with one key-value pair per line.
+Follow these strict formatting rules:
+1. **Format:** Output data as "key: value", one per line.
+2. **Completeness:** Extract every visible field, text, signature, stamp, and table cell.
+3. **Naming:** Use descriptive field names (e.g., "Page_{page_num}_Applicant_Name").
+4. **Separation:** Add a blank line between entries.
 
-2. **Line Separation:** Place a mandatory, extra line break (blank line) after every single key-value entry to maximize separation and readability.
+Output Structure:
+Page {page_num} Field: [Value]
 
-3. **Data Completeness:** Extract and include every single field visible on this page, even if the value is blank, in which case use "(Not specified)".
-   - Extract ALL visible text, checkmarks, checkboxes, radio buttons, signatures, stamps, and any other elements
-   - Include section headers, form titles, and any organizational elements on this page
-   - For tables on this page, extract each cell as a separate field with descriptive names
-   - Pay special attention to continuation fields from previous pages
+Page {page_num} Field: [Value]
+"""
 
-4. **Field Naming:** Use clear and descriptive field names (keys) that reflect the field's purpose and location.
-   - Include positioning information like "Page_{page_num}_Section_X_Field_Y" when appropriate
-   - Use standardized prefixes like "Applicant_", "Father_", "Income_", etc.
 
-5. **Handling Options/Checkmarks:** For any field that presents options (e.g., YES/NO, CENTRAL/STATE):
-   * List all available options in the value section.
-   * Explicitly state the "Selection" after the options.
-   * If a selection can be determined from the source (e.g., a checkmark, slash, or circle), identify and state that selection.
-   * If no clear selection is made, state "Selection: (Not specified)".
-
-6. **Table and Form Detection:** For tables or structured data on this page:
-   * Extract each cell with a descriptive field name that includes row and column information
-   * Example: "Page_{page_num}_Table_1_Row_2_Col_1_Description: [Value]"
-
-7. **Signature and Stamp Detection:** Note any signatures or official stamps on this page.
-   * Example: "Page_{page_num}_Signature_Authority: [Signature details if visible]"
-   * Example: "Page_{page_num}_Official_Stamp: [Description of stamp if visible]"
-
-**IMPORTANT:** Focus on extracting ALL elements visible on page {page_num}. Do not miss any fields that might continue from previous pages or continue to future pages. Ensure comprehensive extraction from this specific page.
-
-**Example Output Structure:**
-
-Page {page_num} Document Title: [Extracted Title]
-
-Page {page_num} Full name of the Applicant: [Extracted Name]
-
-Page {page_num} Father's Name: [Father's Name]
-
-Page {page_num} Gender: [Extracted Gender]
-
-Page {page_num} Whether Tax Paid: YES/NO [Options: YES/NO] [Selection: NO]
-
-Page {page_num} Services: CENTRAL/STATE [Options: CENTRAL/STATE] [Selection: (Not specified)]"""
 
 @dataclass
 class DocumentExtractionResult:
@@ -253,6 +100,68 @@ class DocumentProcessor:
         self.template_matcher = FormTemplateMatcher()
         logger.info("DocumentProcessor initialized")
 
+    def _create_context_instructions(self, document_name: Optional[str]) -> str:
+        """
+        Create context-specific instructions based on document name/type
+        """
+        if not document_name:
+            return ""
+            
+        template = self.template_matcher.get_template_by_name(document_name)
+        if not template:
+            return ""
+            
+        logger.info(f"Context Optimization: Using template '{template.name}' for extraction hints")
+        
+        instructions = [f"This appears to be a {template.name}. Pay special attention to these fields:"]
+        for field in template.field_patterns:
+            instructions.append(f"- {field.field_name}")
+            
+        return "\n".join(instructions)
+
+    def _process_document_exhaustive(self, file_path: Path, document_name: Optional[str] = None) -> str:
+        """
+        Process document using a single exhaustive prompt with context optimization
+        """
+        context_instructions = self._create_context_instructions(document_name)
+        
+        if file_path.suffix.lower() == '.pdf':
+            # Page-by-page for PDFs
+            logger.info(f"Processing PDF with exhaustive prompt: {file_path.name}")
+            page_extractions = []
+            
+            import tempfile
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # We need to split PDF to pages first
+                # Note: pdf_processor.split_pdf_to_pages returns list of Path objects
+                page_files = self.pdf_processor.split_pdf_to_pages(file_path, Path(temp_dir))
+                
+                for page_num, page_file in enumerate(page_files, 1):
+                    logger.info(f"Processing page {page_num}/{len(page_files)}")
+                    prompt = get_page_specific_prompt(page_num, context_instructions)
+                    
+                    try:
+                        extraction = self.gemini_client.generate_content_with_file(
+                            file_path=page_file,
+                            prompt=prompt,
+                            wait_for_processing=True
+                        )
+                        page_extractions.append(extraction)
+                    except Exception as e:
+                        logger.error(f"Error processing page {page_num}: {e}")
+                        page_extractions.append(f"Error extracting page {page_num}: {str(e)}")
+                    
+            return "\n\n".join(page_extractions)
+        else:
+            # Single pass for images
+            logger.info(f"Processing image with exhaustive prompt: {file_path.name}")
+            prompt = EXHAUSTIVE_EXTRACTION_PROMPT.format(context_instructions=context_instructions)
+            return self.gemini_client.generate_content_with_file(
+                file_path=file_path,
+                prompt=prompt,
+                wait_for_processing=True
+            )
+
     def process_document(
         self,
         file_path: Path,
@@ -280,14 +189,9 @@ class DocumentProcessor:
             # Use custom name if provided, otherwise use filename
             doc_name = document_name or file_path.stem
 
-            # Check if file is a PDF and handle page-by-page extraction if needed
-            if file_path.suffix.lower() == '.pdf':
-                logger.info(f"Processing PDF file with {metadata.page_count or 'unknown'} pages")
-                extracted_text = self._process_pdf_with_pages(file_path)
-            else:
-                # For images and other formats, use multi-step extraction
-                logger.info(f"Processing non-PDF file: {file_path.suffix}")
-                extracted_text = self._process_single_document_full_extraction(file_path)
+            # Use exhaustive extraction with context optimization
+            logger.info(f"Starting exhaustive extraction for: {file_path.name}")
+            extracted_text = self._process_document_exhaustive(file_path, doc_name)
 
             # Create result object
             result = DocumentExtractionResult(
