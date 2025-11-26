@@ -8,7 +8,7 @@ __author__ = "AP Seva Development Team"
 
 from .config import Config
 from .certificate_types import CertificateType, CertificateSpecs
-from .gemini_client import GeminiClient
+from .vertex_client import VertexAIClient
 from .document_processor import DocumentProcessor
 from .summary_generator import SummaryGenerator
 from .file_handler import FileHandler
@@ -17,7 +17,7 @@ __all__ = [
     'Config',
     'CertificateType',
     'CertificateSpecs',
-    'GeminiClient',
+    'VertexAIClient',
     'DocumentProcessor',
     'SummaryGenerator',
     'FileHandler',

@@ -10,7 +10,7 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass, asdict
 from datetime import datetime
 
-from src.gemini_client import GeminiClient
+from src.vertex_client import VertexAIClient
 from src.certificate_types import CertificateType, CertificateSpecs
 from src.document_processor import DocumentExtractionResult
 from src.config import Config
@@ -49,14 +49,14 @@ class SummaryResult:
 class SummaryGenerator:
     """Stage 2: Generate cross-document summary from extracted data"""
 
-    def __init__(self, gemini_client: Optional[GeminiClient] = None):
+    def __init__(self, gemini_client: Optional[VertexAIClient] = None):
         """
         Initialize summary generator
 
         Args:
-            gemini_client: Gemini client instance (creates new one if not provided)
+            gemini_client: Vertex AI client instance (creates new one if not provided)
         """
-        self.gemini_client = gemini_client or GeminiClient()
+        self.gemini_client = gemini_client or VertexAIClient()
         logger.info("SummaryGenerator initialized")
 
     def _build_document_section(
@@ -80,6 +80,7 @@ class SummaryGenerator:
                 continue
 
             # Use document name/filename for identification
+            # The extracted_text will already be in the correct format (JSON or text)
             section = f"**Document: {result.file_name}**\n{result.extracted_text}\n"
             sections.append(section)
 
@@ -113,6 +114,7 @@ class SummaryGenerator:
                 doc_name = document_names[idx]
 
             # Use document name for identification
+            # The extracted_text will already be in the correct format (JSON or text)
             section = f"**Document: {doc_name}**\n{result.extracted_text}\n"
             sections.append(section)
 

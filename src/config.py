@@ -14,15 +14,24 @@ load_dotenv()
 class Config:
     """Configuration class for the document validation system"""
 
-    # API Configuration
+    # API Configuration - OpenAI SDK with Gemini base URL
     GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+    GEMINI_BASE_URL: str = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
+
+    # Vertex AI Configuration (Alternative to direct Gemini API)
+    VERTEX_PROJECT_ID: Optional[str] = os.getenv("VERTEX_PROJECT_ID")
+    VERTEX_LOCATION: str = os.getenv("VERTEX_LOCATION", "us-central1")
 
     # Generation Configuration
     TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.0"))
     TOP_P: float = float(os.getenv("TOP_P", "0.95"))
     TOP_K: int = int(os.getenv("TOP_K", "40"))
     MAX_OUTPUT_TOKENS: int = int(os.getenv("MAX_OUTPUT_TOKENS", "8192"))
+
+    # Output Format Configuration (Token Optimization)
+    # Only "text" format is now supported for token optimization
+    OUTPUT_FORMAT: str = os.getenv("OUTPUT_FORMAT", "text")
 
     # File Configuration
     SUPPORTED_IMAGE_FORMATS = ['.jpg', '.jpeg', '.png']

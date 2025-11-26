@@ -1,112 +1,96 @@
 """
-Gemini API Client Wrapper
-Handles file upload and content generation using Google Gemini 2.5
+Gemini API Client Wrapper using OpenAI SDK
+Handles file upload and content generation using Gemini 2.0 via OpenAI-compatible API
 """
 
 import time
 import logging
+import base64
 from pathlib import Path
-from typing import Optional, Union, Any
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from typing import Optional, Union, Any, List
+from openai import OpenAI
 
 from src.config import Config
+from src.token_monitor import get_monitor
 
 logger = logging.getLogger(__name__)
 
 class GeminiClient:
-    """Wrapper for Google Gemini API interactions"""
+    """Wrapper for Gemini API interactions using OpenAI SDK"""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, enable_token_monitoring: bool = True):
         """
-        Initialize Gemini client
+        Initialize Gemini client with OpenAI SDK
 
         Args:
             api_key: Gemini API key (uses Config.GEMINI_API_KEY if not provided)
+            enable_token_monitoring: Whether to enable token usage monitoring
         """
         self.api_key = api_key or Config.GEMINI_API_KEY
         if not self.api_key:
             raise ValueError("Gemini API key is required")
 
-        genai.configure(api_key=self.api_key)
+        # Initialize OpenAI client with Gemini base URL
+        self.client = OpenAI(
+            api_key=self.api_key,
+            base_url=Config.GEMINI_BASE_URL
+        )
+        
         self.model_name = Config.GEMINI_MODEL
 
         # Configure generation parameters
         self.generation_config = {
             "temperature": Config.TEMPERATURE,
             "top_p": Config.TOP_P,
-            "top_k": Config.TOP_K,
-            "max_output_tokens": Config.MAX_OUTPUT_TOKENS,
+            "max_tokens": Config.MAX_OUTPUT_TOKENS,
         }
 
-        # Safety settings - minimal blocking for document processing
-        self.safety_settings = {
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-        }
+        # Initialize token monitoring
+        self.enable_token_monitoring = enable_token_monitoring
+        if self.enable_token_monitoring:
+            self.token_monitor = get_monitor()
+            logger.info("Token monitoring enabled")
+        else:
+            self.token_monitor = None
 
-        logger.info(f"Initialized GeminiClient with model: {self.model_name}")
+        logger.info(f"Initialized GeminiClient with model: {self.model_name} via OpenAI SDK")
+        logger.info(f"Base URL: {Config.GEMINI_BASE_URL}")
 
-    def upload_file(self, file_path: Union[str, Path]) -> Any:
+    def _encode_file_to_base64(self, file_path: Union[str, Path]) -> str:
         """
-        Upload a file to Gemini API
+        Encode file to base64 string
 
         Args:
-            file_path: Path to the file to upload
+            file_path: Path to the file to encode
 
         Returns:
-            Uploaded file object
-
-        Raises:
-            FileNotFoundError: If file doesn't exist
-            Exception: For API errors
+            Base64 encoded string
         """
         file_path = Path(file_path)
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        logger.info(f"Uploading file to Gemini: {file_path.name}")
+        with open(file_path, "rb") as f:
+            return base64.b64encode(f.read()).decode('utf-8')
 
-        try:
-            uploaded_file = genai.upload_file(path=str(file_path))
-            logger.info(f"File uploaded successfully: {uploaded_file.name}")
-            return uploaded_file
-        except Exception as e:
-            logger.error(f"Error uploading file {file_path.name}: {str(e)}")
-            raise
-
-    def wait_for_file_processing(self, uploaded_file: Any, timeout: int = 300) -> bool:
+    def _get_mime_type(self, file_path: Path) -> str:
         """
-        Wait for uploaded file to be processed by Gemini
+        Get MIME type for file
 
         Args:
-            uploaded_file: Uploaded file object
-            timeout: Maximum wait time in seconds
+            file_path: Path to the file
 
         Returns:
-            True if file is processed successfully
-
-        Raises:
-            TimeoutError: If processing times out
-            Exception: If processing fails
+            MIME type string
         """
-        start_time = time.time()
-
-        while uploaded_file.state.name == "PROCESSING":
-            if time.time() - start_time > timeout:
-                raise TimeoutError(f"File processing timeout after {timeout} seconds")
-
-            logger.debug(f"Waiting for file processing: {uploaded_file.name}")
-            time.sleep(2)
-            uploaded_file = genai.get_file(uploaded_file.name)
-
-        if uploaded_file.state.name == "FAILED":
-            raise Exception(f"File processing failed: {uploaded_file.name}")
-
-        logger.info(f"File processed successfully: {uploaded_file.name}")
-        return True
+        suffix = file_path.suffix.lower()
+        mime_types = {
+            '.pdf': 'application/pdf',
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+        }
+        return mime_types.get(suffix, 'application/octet-stream')
 
     def generate_content_with_file(
         self,
@@ -115,38 +99,74 @@ class GeminiClient:
         wait_for_processing: bool = True
     ) -> str:
         """
-        Upload file and generate content with prompt (Stage 1)
+        Generate content with file using OpenAI SDK (Stage 1)
 
         Args:
             file_path: Path to PDF or image file
             prompt: Prompt to send with the file
-            wait_for_processing: Whether to wait for file processing
+            wait_for_processing: Compatibility parameter (not used with OpenAI SDK)
 
         Returns:
             Generated text response
         """
+        file_path = Path(file_path)
+        
         for attempt in range(Config.MAX_RETRIES):
             try:
-                # Upload file
-                uploaded_file = self.upload_file(file_path)
+                logger.info(f"Generating content for file: {file_path.name}")
 
-                # Wait for processing if needed
-                if wait_for_processing:
-                    self.wait_for_file_processing(uploaded_file)
+                # Encode file to base64
+                base64_file = self._encode_file_to_base64(file_path)
+                mime_type = self._get_mime_type(file_path)
 
-                # Generate content
-                model = genai.GenerativeModel(
-                    model_name=self.model_name,
-                    generation_config=self.generation_config,
-                    safety_settings=self.safety_settings
+                # Create messages with file content
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": prompt
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{mime_type};base64,{base64_file}"
+                                }
+                            }
+                        ]
+                    }
+                ]
+
+                # Generate content using OpenAI SDK
+                # No response format configuration needed for text format
+                extra_params = {}
+
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
+                    **self.generation_config,
+                    **extra_params
                 )
 
-                logger.info(f"Generating content for file: {Path(file_path).name}")
-                response = model.generate_content([uploaded_file, prompt])
-
                 # Extract text from response
-                result = response.text
+                result = response.choices[0].message.content
                 logger.info(f"Content generated successfully ({len(result)} chars)")
+
+                # Record token usage
+                if self.enable_token_monitoring and hasattr(response, 'usage'):
+                    self.token_monitor.record_usage(
+                        model=self.model_name,
+                        operation_type='file_generation',
+                        prompt_tokens=response.usage.prompt_tokens,
+                        completion_tokens=response.usage.completion_tokens,
+                        total_tokens=response.usage.total_tokens,
+                        file_name=file_path.name,
+                        prompt_preview=prompt
+                    )
+                    logger.info(f"Token usage: {response.usage.total_tokens} tokens "
+                              f"(input: {response.usage.prompt_tokens}, "
+                              f"output: {response.usage.completion_tokens})")
                 
                 # Development logging: Log full LLM output
                 logger.debug(f"LLM RAW OUTPUT START [{file_path.name}]")
@@ -179,17 +199,43 @@ class GeminiClient:
         """
         for attempt in range(Config.MAX_RETRIES):
             try:
-                model = genai.GenerativeModel(
-                    model_name=self.model_name,
-                    generation_config=self.generation_config,
-                    safety_settings=self.safety_settings
+                logger.info(f"Generating content from text prompt ({len(prompt)} chars)")
+
+                # Create messages
+                messages = [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+
+                # Generate content using OpenAI SDK
+                # No response format configuration needed for text format
+                extra_params = {}
+
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
+                    **self.generation_config,
+                    **extra_params
                 )
 
-                logger.info(f"Generating content from text prompt ({len(prompt)} chars)")
-                response = model.generate_content(prompt)
-
-                result = response.text
+                result = response.choices[0].message.content
                 logger.info(f"Content generated successfully ({len(result)} chars)")
+
+                # Record token usage
+                if self.enable_token_monitoring and hasattr(response, 'usage'):
+                    self.token_monitor.record_usage(
+                        model=self.model_name,
+                        operation_type='text_generation',
+                        prompt_tokens=response.usage.prompt_tokens,
+                        completion_tokens=response.usage.completion_tokens,
+                        total_tokens=response.usage.total_tokens,
+                        prompt_preview=prompt
+                    )
+                    logger.info(f"Token usage: {response.usage.total_tokens} tokens "
+                              f"(input: {response.usage.prompt_tokens}, "
+                              f"output: {response.usage.completion_tokens})")
 
                 return result
 
@@ -204,15 +250,68 @@ class GeminiClient:
                     logger.error("All retries exhausted for text generation")
                     raise
 
+    # Legacy compatibility methods (no longer needed with OpenAI SDK)
+    def upload_file(self, file_path: Union[str, Path]) -> Any:
+        """
+        Legacy method for compatibility - not used with OpenAI SDK
+        
+        Args:
+            file_path: Path to the file
+            
+        Returns:
+            File path (for compatibility)
+        """
+        logger.warning("upload_file() is deprecated with OpenAI SDK - files are sent inline")
+        return file_path
+
+    def wait_for_file_processing(self, uploaded_file: Any, timeout: int = 300) -> bool:
+        """
+        Legacy method for compatibility - not needed with OpenAI SDK
+        
+        Args:
+            uploaded_file: File reference
+            timeout: Not used
+            
+        Returns:
+            True (for compatibility)
+        """
+        logger.warning("wait_for_file_processing() is not needed with OpenAI SDK")
+        return True
+
     def delete_file(self, file_name: str) -> None:
         """
-        Delete uploaded file from Gemini
-
+        Legacy method for compatibility - not needed with OpenAI SDK
+        
         Args:
-            file_name: Name of the file to delete
+            file_name: Name of the file
         """
-        try:
-            genai.delete_file(file_name)
-            logger.info(f"Deleted file: {file_name}")
-        except Exception as e:
-            logger.warning(f"Error deleting file {file_name}: {str(e)}")
+        logger.warning("delete_file() is not needed with OpenAI SDK - files are not stored")
+
+    def get_token_stats(self) -> dict:
+        """
+        Get token usage statistics for current session
+        
+        Returns:
+            Dictionary with token statistics
+        """
+        if self.enable_token_monitoring:
+            return self.token_monitor.get_session_stats()
+        return {}
+    
+    def print_token_summary(self):
+        """Print token usage summary for current session"""
+        if self.enable_token_monitoring:
+            self.token_monitor.print_session_summary()
+        else:
+            logger.warning("Token monitoring is not enabled")
+
+    def start_token_transaction(self, transaction_name: str):
+        """Start tracking tokens for a specific transaction"""
+        if self.enable_token_monitoring:
+            self.token_monitor.start_transaction(transaction_name)
+
+    def end_token_transaction(self) -> dict:
+        """End current transaction and return token statistics"""
+        if self.enable_token_monitoring:
+            return self.token_monitor.end_transaction()
+        return {}

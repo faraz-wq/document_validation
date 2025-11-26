@@ -9,57 +9,178 @@ from pathlib import Path
 from typing import Dict, Optional, List
 from dataclasses import dataclass, asdict
 
-from src.gemini_client import GeminiClient
+# VERTEX AI ALTERNATIVE: Uncomment the line below to use Vertex AI instead
+from src.vertex_client import VertexAIClient
 from src.file_handler import FileHandler, FileMetadata
 from src.config import Config
 from src.pdf_processor import PDFProcessor
 from src.form_templates import FormTemplateMatcher
+# TOKEN OPTIMIZATION: Import optimized prompts that adapt to output format
+from src.prompts_optimized import get_extraction_prompt_for_format, get_page_prompt_for_format
 
 logger = logging.getLogger(__name__)
 
-# Enhanced Stage 1 Prompts - Multi-step field extraction approach
+# Note: Prompts are now imported from prompts_optimized.py
+# They automatically adapt based on Config.OUTPUT_FORMAT (text only)
+# Text format saves 20-40% tokens compared to JSON when JSON was supported
 
-# Initial comprehensive extraction prompt
-# Exhaustive Extraction Prompt with Context Optimization support
-EXHAUSTIVE_EXTRACTION_PROMPT = """You are a document digitization expert. Your goal is to extract EVERY single piece of information from this document with 100% accuracy.
 
-Rules:
-1. Extract ALL text, labels, values, headers, footers, table data, and handwritten notes.
-2. Maintain the original structure and hierarchy where possible.
-3. For every field found, output it in the format: "Field Name: [Value]"
-4. If a value is missing or illegible, write "(Not specified)" or "(Illegible)".
-5. Do not summarize. Do not leave out any details, no matter how small.
-6. For tables, extract each cell with a descriptive key indicating its row/column or header.
-7. Capture all checkmarks, radio buttons, and selections (e.g., "Selection: Yes").
-
-{context_instructions}
-
-Output Format:
-Field Name: [Value]
-
-Field Name: [Value]
-...
+# Define extraction prompt constants with format-specific versions
+def _get_name_extraction_prompt():
+    """Get name-specific extraction prompt based on configured output format"""
+    if Config.OUTPUT_FORMAT == "json":
+        return """Extract all name-related fields from this document.
+Output as valid JSON with fields like:
+{
+  "applicant_name": "Full name of applicant",
+  "father_name": "Father's name",
+  "mother_name": "Mother's name",
+  "spouse_name": "Spouse name",
+  "other_names": "Other names mentioned"
+}
+"""
+    else:  # text format
+        return """Extract all name-related fields from this document.
+Output in plain text format as:
+Applicant_Name: Full name of applicant
+Father_Name: Father's name
+Mother_Name: Mother's name
+Spouse_Name: Spouse name
+Other_Names: Other names mentioned
 """
 
-def get_page_specific_prompt(page_num: int, context_instructions: str = "") -> str:
-    """
-    Get a prompt specifically for a given page number with context optimization
-    """
-    return f"""You are tasked with digitizing and extracting ALL data from page {page_num} of an uploaded document.
-    
-{context_instructions}
-
-Follow these strict formatting rules:
-1. **Format:** Output data as "key: value", one per line.
-2. **Completeness:** Extract every visible field, text, signature, stamp, and table cell.
-3. **Naming:** Use descriptive field names (e.g., "Page_{page_num}_Applicant_Name").
-4. **Separation:** Add a blank line between entries.
-
-Output Structure:
-Page {page_num} Field: [Value]
-
-Page {page_num} Field: [Value]
+def _get_date_extraction_prompt():
+    """Get date-specific extraction prompt based on configured output format"""
+    if Config.OUTPUT_FORMAT == "json":
+        return """Extract all date-related fields from this document.
+Output as valid JSON with fields like:
+{
+  "date_of_birth": "DOB in YYYY-MM-DD format",
+  "issue_date": "Document issue date",
+  "expiry_date": "Document expiry date",
+  "application_date": "Application submission date"
+}
 """
+    elif Config.OUTPUT_FORMAT == "toon":
+        return """Extract all date-related fields from this document.
+Output in TOON format as:
+date_of_birth: YYYY-MM-DD format
+issue_date: Document issue date
+expiry_date: Document expiry date
+application_date: Application submission date
+"""
+    else:  # text format
+        return """Extract all date-related fields from this document.
+Output in plain text format as:
+Date_of_Birth: YYYY-MM-DD format
+Issue_Date: Document issue date
+Expiry_Date: Document expiry date
+Application_Date: Application submission date
+"""
+
+def _get_financial_extraction_prompt():
+    """Get financial-specific extraction prompt based on configured output format"""
+    if Config.OUTPUT_FORMAT == "json":
+        return """Extract all financial-related fields from this document.
+Output as valid JSON with fields like:
+{
+  "annual_income": "Annual income amount",
+  "salary": "Monthly/annual salary",
+  "bank_balance": "Account balance",
+  "tax_amount": "Tax amount",
+  "other_financials": "Other financial information"
+}
+"""
+    else:  # text format
+        return """Extract all financial-related fields from this document.
+Output in plain text format as:
+Annual_Income: Annual income amount
+Salary: Monthly/annual salary
+Bank_Balance: Account balance
+Tax_Amount: Tax amount
+Other_Financials: Other financial information
+"""
+
+def _get_identification_extraction_prompt():
+    """Get identification-specific extraction prompt based on configured output format"""
+    if Config.OUTPUT_FORMAT == "json":
+        return """Extract all identification-related fields from this document.
+Output as valid JSON with fields like:
+{
+  "aadhaar_number": "Aadhaar card number",
+  "pan_number": "PAN card number",
+  "passport_number": "Passport number",
+  "voter_id": "Voter ID number",
+  "driving_license": "Driving license number"
+}
+"""
+    else:  # text format
+        return """Extract all identification-related fields from this document.
+Output in plain text format as:
+Aadhaar_Number: Aadhaar card number
+PAN_Number: PAN card number
+Passport_Number: Passport number
+Voter_ID: Voter ID number
+Driving_License: Driving license number
+"""
+
+def _get_checkmark_extraction_prompt():
+    """Get checkmark-specific extraction prompt based on configured output format"""
+    if Config.OUTPUT_FORMAT == "json":
+        return """Extract all checkbox and selection fields from this document.
+Output as valid JSON with fields like:
+{
+  "option1_selected": true/false,
+  "option2_selected": true/false,
+  "selections": ["list", "of", "selected", "options"]
+}
+"""
+    else:  # text format
+        return """Extract all checkbox and selection fields from this document.
+Output in plain text format as:
+Option1_Selected: true or false
+Option2_Selected: true or false
+Selections: list,of,selected,options
+"""
+
+def _get_table_extraction_prompt():
+    """Get table-specific extraction prompt based on configured output format"""
+    if Config.OUTPUT_FORMAT == "json":
+        return """Extract all table data from this document.
+Output as valid JSON with arrays for tabular data like:
+{
+  "tables": [
+    {
+      "headers": ["col1", "col2", "col3"],
+      "rows": [
+        {"col1": "value1", "col2": "value2", "col3": "value3"},
+        {"col1": "value4", "col2": "value5", "col3": "value6"}
+      ]
+    }
+  ]
+}
+"""
+    elif Config.OUTPUT_FORMAT == "toon":
+        return """Extract all table data from this document.
+Output in TOON format as:
+[2,]{col1,col2,col3}:
+  value1,value2,value3
+  value4,value5,value6
+"""
+    else:  # text format
+        return """Extract all table data from this document.
+Output in plain text format as:
+Table_Row1: value1, value2, value3
+Table_Row2: value4, value5, value6
+"""
+
+# Assign the functions to the corresponding constants
+NAME_EXTRACTION_PROMPT = _get_name_extraction_prompt()
+DATE_EXTRACTION_PROMPT = _get_date_extraction_prompt()
+FINANCIAL_EXTRACTION_PROMPT = _get_financial_extraction_prompt()
+IDENTIFICATION_EXTRACTION_PROMPT = _get_identification_extraction_prompt()
+CHECKMARK_EXTRACTION_PROMPT = _get_checkmark_extraction_prompt()
+TABLE_EXTRACTION_PROMPT = _get_table_extraction_prompt()
 
 
 
@@ -88,14 +209,15 @@ class DocumentExtractionResult:
 class DocumentProcessor:
     """Stage 1: Process individual documents to extract structured data"""
 
-    def __init__(self, gemini_client: Optional[GeminiClient] = None):
+    def __init__(self, gemini_client: Optional[VertexAIClient] = None):
         """
         Initialize document processor
 
         Args:
-            gemini_client: Gemini client instance (creates new one if not provided)
+            gemini_client: Vertex AI client instance (creates new one if not provided)
         """
-        self.gemini_client = gemini_client or GeminiClient()
+        # VERTEX AI ALTERNATIVE: Uncomment the line below and comment the line above to use Vertex AI
+        self.gemini_client = gemini_client or VertexAIClient()
         self.pdf_processor = PDFProcessor()
         self.template_matcher = FormTemplateMatcher()
         logger.info("DocumentProcessor initialized")
@@ -122,45 +244,53 @@ class DocumentProcessor:
     def _process_document_exhaustive(self, file_path: Path, document_name: Optional[str] = None) -> str:
         """
         Process document using a single exhaustive prompt with context optimization
+        Returns string representation of extracted data in configured format (JSON, text, or TOON)
         """
         context_instructions = self._create_context_instructions(document_name)
-        
+
         if file_path.suffix.lower() == '.pdf':
             # Page-by-page for PDFs
             logger.info(f"Processing PDF with exhaustive prompt: {file_path.name}")
             page_extractions = []
-            
+
             import tempfile
             with tempfile.TemporaryDirectory() as temp_dir:
                 # We need to split PDF to pages first
                 # Note: pdf_processor.split_pdf_to_pages returns list of Path objects
                 page_files = self.pdf_processor.split_pdf_to_pages(file_path, Path(temp_dir))
-                
+
                 for page_num, page_file in enumerate(page_files, 1):
                     logger.info(f"Processing page {page_num}/{len(page_files)}")
-                    prompt = get_page_specific_prompt(page_num, context_instructions)
-                    
+                    prompt = get_page_prompt_for_format(page_num, context_instructions)
+
                     try:
                         extraction = self.gemini_client.generate_content_with_file(
                             file_path=page_file,
                             prompt=prompt,
                             wait_for_processing=True
                         )
+
+                        # For text format, just use the raw extraction
                         page_extractions.append(extraction)
+
                     except Exception as e:
                         logger.error(f"Error processing page {page_num}: {e}")
-                        page_extractions.append(f"Error extracting page {page_num}: {str(e)}")
-                    
+                        # For text format, use simple error message
+                        page_extractions.append(f"Error on page {page_num}: {str(e)}")
+
             return "\n\n".join(page_extractions)
         else:
             # Single pass for images
             logger.info(f"Processing image with exhaustive prompt: {file_path.name}")
-            prompt = EXHAUSTIVE_EXTRACTION_PROMPT.format(context_instructions=context_instructions)
-            return self.gemini_client.generate_content_with_file(
+            prompt = get_extraction_prompt_for_format(context_instructions)
+            extraction = self.gemini_client.generate_content_with_file(
                 file_path=file_path,
                 prompt=prompt,
                 wait_for_processing=True
             )
+
+            # For text format, just return the raw extraction
+            return extraction
 
     def process_document(
         self,
@@ -426,7 +556,7 @@ class DocumentProcessor:
                         # First pass: General comprehensive extraction
                         general_extraction = self.gemini_client.generate_content_with_file(
                             file_path=page_files[page_num-1],  # 0-based index
-                            prompt=get_page_specific_prompt(page_num),
+                            prompt=get_page_prompt_for_format(page_num),
                             wait_for_processing=True
                         )
 
@@ -496,7 +626,7 @@ class DocumentProcessor:
                         try:
                             page_extraction = self.gemini_client.generate_content_with_file(
                                 file_path=page_files[page_num-1],
-                                prompt=get_page_specific_prompt(page_num),
+                                prompt=get_page_prompt_for_format(page_num),
                                 wait_for_processing=True
                             )
                             # Apply verification to fallback extraction too
@@ -539,7 +669,7 @@ class DocumentProcessor:
             # Step 1: General comprehensive extraction
             general_extraction = self.gemini_client.generate_content_with_file(
                 file_path=file_path,
-                prompt=STAGE1_FULL_DOCUMENT_PROMPT,
+                prompt=get_extraction_prompt_for_format(),
                 wait_for_processing=True
             )
 
@@ -609,7 +739,7 @@ class DocumentProcessor:
             logger.info("Falling back to basic extraction method")
             basic_extraction = self.gemini_client.generate_content_with_file(
                 file_path=file_path,
-                prompt=STAGE1_FULL_DOCUMENT_PROMPT,
+                prompt=get_extraction_prompt_for_format(),
                 wait_for_processing=True
             )
             # Apply verification to fallback extraction too
@@ -848,12 +978,13 @@ class DocumentProcessor:
         output_dir = output_dir or Config.STAGE1_DIR
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Save extracted text
+        # Determine file extension based on output format (only text format supported now)
         text_file = output_dir / f"{result.document_id}_extracted.txt"
+
         with open(text_file, 'w', encoding='utf-8') as f:
             f.write(result.extracted_text)
 
-        # Save metadata as JSON
+        # Save metadata as JSON (this is for internal tracking, not the extracted content)
         json_file = output_dir / f"{result.document_id}_metadata.json"
         with open(json_file, 'w', encoding='utf-8') as f:
             f.write(result.to_json())

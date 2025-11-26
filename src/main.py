@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.config import Config
 from src.certificate_types import CertificateType, CertificateSpecs
-from src.gemini_client import GeminiClient
+from src.vertex_client import VertexAIClient
 from src.document_processor import DocumentProcessor
 from src.summary_generator import SummaryGenerator
 from src.file_handler import FileHandler
@@ -41,7 +41,7 @@ class DocumentValidationWorkflow:
         Config.validate()
 
         # Initialize components
-        self.gemini_client = GeminiClient()
+        self.gemini_client = VertexAIClient()
         self.document_processor = DocumentProcessor(self.gemini_client)
         self.summary_generator = SummaryGenerator(self.gemini_client)
 
@@ -70,6 +70,9 @@ class DocumentValidationWorkflow:
         print_key_value("Certificate Type", CertificateSpecs.get_spec(cert_type)["name"])
         print_key_value("Documents to Process", len(file_paths))
         print()
+
+        # Start tracking tokens for this certificate processing transaction
+        self.gemini_client.token_monitor.start_transaction(f"{cert_type.value}_cert_processing")
 
         # Stage 1: Process individual documents
         print_section("STAGE 1: Document Digitization")
@@ -135,13 +138,26 @@ class DocumentValidationWorkflow:
             print_key_value("  Stage 2 Summaries", Config.STAGE2_DIR, indent=1)
             print()
 
+        # End token tracking for this transaction and get statistics
+        transaction_stats = self.gemini_client.token_monitor.end_transaction()
+
+        print_section("TOKEN USAGE FOR TRANSACTION")
+        print(f"Certificate Type: {transaction_stats['transaction_name']}")
+        print(f"Total Tokens: {transaction_stats['total_tokens']:,}")
+        print(f"  - Input Tokens: {transaction_stats['total_prompt_tokens']:,}")
+        print(f"  - Output Tokens: {transaction_stats['total_completion_tokens']:,}")
+        print(f"  - API Calls: {transaction_stats['api_calls']}")
+        print(f"  - Estimated Cost: ${transaction_stats['estimated_cost']:.4f}")
+        print()
+
         return {
             "success": stage2_result.success and len(successful_docs) > 0,
             "stage1_results": stage1_results,
             "stage2_result": stage2_result,
             "certificate_type": cert_type.value,
             "documents_processed": len(successful_docs),
-            "documents_failed": len(failed_docs)
+            "documents_failed": len(failed_docs),
+            "token_usage": transaction_stats  # Add token usage info to result
         }
 
     def run_stage1(

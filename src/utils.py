@@ -12,6 +12,11 @@ from datetime import datetime
 
 from src.config import Config
 
+# TOON format support removed
+TOON_AVAILABLE = False
+toon_encode = None
+toon_decode = None
+
 def setup_logging(
     log_level: Optional[str] = None,
     log_file: Optional[str] = None,
@@ -307,6 +312,7 @@ def get_timestamp(format: str = "%Y%m%d_%H%M%S") -> str:
         Formatted timestamp
     """
     return datetime.now().strftime(format)
+
 
 class ProgressTracker:
     """Simple progress tracker for batch operations"""
