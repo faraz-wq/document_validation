@@ -20,7 +20,6 @@ from src.gemini_client import GeminiClient
 from src.document_processor import DocumentProcessor
 from src.summary_generator import SummaryGenerator
 from src.file_handler import FileHandler
-from src.document_classifier import DocumentClassifier
 from src.utils import (
     setup_logging,
     print_banner,
@@ -211,14 +210,11 @@ class DocumentValidationWorkflow:
 def parse_arguments():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
-        description="AP Seva Document Validation Workflow with auto-detection capability",
+        description="AP Seva Document Validation Workflow",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Process with auto-detection (new feature!)
-  python main.py --auto-detect --files doc1.pdf doc2.jpg doc3.pdf
-
-  # Process integrated certificate documents (explicit type)
+  # Process integrated certificate documents
   python main.py --cert-type integrated --files doc1.pdf doc2.jpg doc3.pdf
 
   # Process income certificate with custom names
@@ -236,17 +232,11 @@ Examples:
         help='Paths to document files (PDFs and images)'
     )
 
-    cert_group = parser.add_mutually_exclusive_group(required=False)
-    cert_group.add_argument(
+    parser.add_argument(
         '--cert-type',
-        dest='certificate_type',
+        required=True,
         choices=CertificateSpecs.get_certificate_types(),
-        help='Type of certificate application (auto-detect if not provided)'
-    )
-    cert_group.add_argument(
-        '--auto-detect',
-        action='store_true',
-        help='Automatically detect certificate type from document content'
+        help='Type of certificate application'
     )
 
     parser.add_argument(
@@ -282,68 +272,6 @@ Examples:
 
     return parser.parse_args()
 
-def _detect_certificate_type(file_path: Path):
-    """
-    Auto-detect certificate type from document content
-
-    Args:
-        file_path: Path to the document file
-
-    Returns:
-        CertificateType detected from document content
-    """
-    from src.certificate_types import CertificateType
-
-    # We need to do a preliminary extraction to determine the certificate type
-    # For this, we'll do a lightweight extraction using basic methods
-    try:
-        # Use the document processor to do a basic extraction
-        from src.document_processor import DocumentProcessor
-        from src.gemini_client import GeminiClient
-
-        # Initialize a basic processor (without full workflow)
-        gemini_client = GeminiClient()
-        processor = DocumentProcessor(gemini_client)
-
-        # Do a basic processing to get text content - this will use fallback methods if API fails
-        # We'll process just to get the extracted text for classification
-        result = processor.process_document(file_path, document_name="Classification")
-
-        if result.extracted_text:
-            # Use the document classifier to determine type
-            from src.document_classifier import DocumentClassifier
-            classifier = DocumentClassifier()
-
-            classification = classifier.classify_from_file_content(
-                file_path=file_path,
-                extracted_text=result.extracted_text
-            )
-
-            # Log the classification result
-            logger.info(f"Certificate classification result:")
-            logger.info(f"  Type: {classification.certificate_type}")
-            logger.info(f"  Confidence: {classification.confidence:.2f}")
-            logger.info(f"  Keywords: {classification.keywords_found}")
-
-            # Convert string to CertificateType enum
-            cert_type = CertificateType(classification.certificate_type)
-
-            # Log confidence separately since CertificateType doesn't have confidence attribute
-            logger.info(f"Auto-detected certificate type: {cert_type.value} (confidence: {classification.confidence:.2f})")
-
-            return cert_type
-        else:
-            logger.warning("Could not extract text for classification, defaulting to income")
-            # Log the default
-            logger.info(f"Default certificate type: {CertificateType.INCOME.value} (confidence: N/A)")
-            return CertificateType.INCOME  # Default fallback
-
-    except Exception as e:
-        logger.error(f"Error during certificate type detection: {str(e)}")
-        logger.info(f"Defaulting to income certificate type: {CertificateType.INCOME.value}")
-        return CertificateType.INCOME
-
-
 def main():
     """Main entry point"""
     # Parse arguments
@@ -365,16 +293,8 @@ def main():
         for file_path in file_paths:
             FileHandler.validate_file(file_path)
 
-        # Determine certificate type - either provided or auto-detected
-        if args.certificate_type:
-            # Certificate type provided by user
-            cert_type = CertificateSpecs.from_string(args.certificate_type)
-            logger.info(f"Using provided certificate type: {cert_type.value}")
-        else:
-            # Auto-detect certificate type from document content
-            logger.info("Auto-detecting certificate type from document content...")
-            cert_type = _detect_certificate_type(file_paths[0])  # Use first document as representative
-            # Log message is now in the _detect_certificate_type function
+        # Parse certificate type
+        cert_type = CertificateSpecs.from_string(args.cert_type)
 
         # Validate document names if provided
         document_names = args.names

@@ -1,42 +1,10 @@
-# Python dependencies for production-ready multilingual PDF extraction PoC
+# Core Dependencies
+google-generativeai>=0.8.0
+python-dotenv>=1.0.0
 
-# Core dependencies
-openai>=1.0.0                    # OpenAI-compatible LLM client
-python-dotenv>=1.0.0             # Environment variable management
-pydantic>=2.0.0                  # Data validation and schemas
+# Optional but recommended
+Pillow>=10.0.0  # For image handling validation
 
-# PDF processing
-PyMuPDF>=1.23.0                  # PDF rendering (fitz)
-pypdf>=3.0.0                     # Alternative PDF library
-Pillow>=10.0.0                   # Image processing
-
-# OCR
-pytesseract>=0.3.10              # Tesseract OCR wrapper
-easyocr>=1.7.0                   # Alternative OCR engine
-
-# Orchestration
-langgraph>=0.0.1                 # LangGraph for workflow orchestration
-langchain>=0.1.0                 # LangChain core (dependency for LangGraph)
-
-# API
-fastapi>=0.100.0                 # REST API framework
-uvicorn>=0.23.0                  # ASGI server
-pydantic-settings>=2.0.0         # Settings management
-
-# Database (optional - choose one or use JSON files)
-psycopg2-binary>=2.9.0           # PostgreSQL adapter (optional)
-pymongo>=4.0.0                   # MongoDB driver (optional)
-
-# Utilities
-python-multipart>=0.0.6          # File upload support
-aiofiles>=23.0.0                 # Async file operations
-
-# Testing
-pytest>=7.4.0                    # Testing framework
-pytest-asyncio>=0.21.0           # Async test support
-pytest-cov>=4.1.0                # Coverage reporting
-
-# Development
-black>=23.0.0                    # Code formatting
-flake8>=6.0.0                    # Linting
-mypy>=1.5.0                      # Type checking
+# PDF processing dependencies
+PyPDF2>=3.0.0
+pdf2image>=1.16.0  # Optional: for better PDF processing with image conversion
