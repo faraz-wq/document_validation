@@ -354,3 +354,125 @@ class FormTemplateMatcher:
             return "Medium"
         else:
             return "Low"
+
+    def perform_accuracy_validation(self, extracted_text: str) -> Dict[str, any]:
+        """
+        Perform detailed accuracy validation on extracted text
+
+        Args:
+            extracted_text: The full extracted text to validate
+
+        Returns:
+            Detailed accuracy validation report
+        """
+        # Parse the extracted text into fields
+        extracted_fields = self._parse_extracted_text_to_dict(extracted_text)
+
+        # Check for potential data quality issues
+        validation_issues = []
+
+        # Check for empty or placeholder values
+        for field_name, value in extracted_fields.items():
+            if value.strip() == "" or value.strip() == "(Not specified)" or value.strip() == "(Not found - required)":
+                validation_issues.append({
+                    'field': field_name,
+                    'issue': 'empty_or_placeholder',
+                    'description': f"Field '{field_name}' has empty or placeholder value: '{value}'"
+                })
+            elif len(value) == 1 and value in ['X', 'x', '✓', 'V', 'v']:  # Likely a checkmark misinterpreted as value
+                validation_issues.append({
+                    'field': field_name,
+                    'issue': 'checkmark_misidentified',
+                    'description': f"Field '{field_name}' might contain a checkmark instead of actual value: '{value}'"
+                })
+            elif value.replace(' ', '').isalpha() and len(value) == 1:
+                # Single letter that might be a checkmark
+                validation_issues.append({
+                    'field': field_name,
+                    'issue': 'potential_checkmark',
+                    'description': f"Field '{field_name}' has single letter value that might be a checkmark: '{value}'"
+                })
+
+        # Check for common extraction patterns that indicate problems
+        if "Not specified" in extracted_text:
+            count = extracted_text.count("Not specified")
+            if count > len(extracted_fields) * 0.5:  # More than 50% are "Not specified"
+                validation_issues.append({
+                    'field': 'overall_extraction',
+                    'issue': 'high_placeholder_rate',
+                    'description': f"High rate of 'Not specified' values ({count}/{len(extracted_fields)}), indicating potential extraction problems"
+                })
+
+        # Try to find best matching template
+        template_match = self.find_best_template(extracted_text)
+
+        accuracy_report = {
+            'validation_issues': validation_issues,
+            'total_fields': len(extracted_fields),
+            'issue_count': len(validation_issues),
+            'template_match': template_match[0].name if template_match else None,
+            'template_confidence': template_match[1] if template_match else 0.0,
+            'accuracy_score': self._calculate_accuracy_score(extracted_fields, validation_issues),
+            'data_quality_assessment': self._assess_data_quality(extracted_fields, validation_issues)
+        }
+
+        return accuracy_report
+
+    def _calculate_accuracy_score(self, extracted_fields: Dict[str, str], validation_issues: List[Dict]) -> float:
+        """
+        Calculate an accuracy score based on the number and severity of validation issues
+
+        Args:
+            extracted_fields: Dictionary of extracted fields
+            validation_issues: List of validation issues found
+
+        Returns:
+            Accuracy score between 0 and 1
+        """
+        if not extracted_fields:
+            return 0.0
+
+        # Start with perfect score
+        score = 1.0
+
+        # Deduct points for different types of issues
+        for issue in validation_issues:
+            issue_type = issue['issue']
+            if issue_type == 'empty_or_placeholder':
+                score -= 0.1  # Small deduction for empty fields
+            elif issue_type == 'checkmark_misidentified':
+                score -= 0.2  # Medium deduction for misidentified checkmarks
+            elif issue_type == 'potential_checkmark':
+                score -= 0.15  # Medium deduction for potential checkmark issues
+            elif issue_type == 'high_placeholder_rate':
+                score -= 0.3  # Large deduction for high placeholder rate
+
+        # Ensure score doesn't go below 0
+        return max(0.0, min(1.0, score))
+
+    def _assess_data_quality(self, extracted_fields: Dict[str, str], validation_issues: List[Dict]) -> str:
+        """
+        Assess overall data quality based on validation results
+
+        Args:
+            extracted_fields: Dictionary of extracted fields
+            validation_issues: List of validation issues found
+
+        Returns:
+            Quality assessment as a string
+        """
+        if not extracted_fields:
+            return "Very Poor"
+
+        issue_ratio = len(validation_issues) / len(extracted_fields) if extracted_fields else 0
+
+        if issue_ratio == 0:
+            return "Excellent"
+        elif issue_ratio < 0.1:
+            return "Good"
+        elif issue_ratio < 0.25:
+            return "Fair"
+        elif issue_ratio < 0.5:
+            return "Poor"
+        else:
+            return "Very Poor"
