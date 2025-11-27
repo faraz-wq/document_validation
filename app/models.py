@@ -1,0 +1,124 @@
+from pydantic import BaseModel, Field
+from typing import Optional, List
+
+# ==============================================================================
+# 1. COMMON NESTED MODELS (Reusable across all services for consistency)
+# ==============================================================================
+
+class SourceDocument(BaseModel):
+    """Maps extracted data back to the source file for traceability."""
+    document_title: str = Field(
+        description="The primary title or type of the document (e.g., 'Application Form', 'Aadhaar Card')."
+    )
+    filename: str = Field(
+        description="The original filename of the document (e.g., 'caste.pdf')."
+    )
+
+class ApplicantCommon(BaseModel):
+    """Common details required for most applications."""
+    applicant_name: str
+    fathers_name: str
+    address: str = Field(description="Consolidated full address.")
+    gender: str
+    age_dob: str = Field(description="Age or Date of Birth (DD/MM/YYYY).")
+    phone_number: Optional[str] = None
+    
+# ==============================================================================
+# 2. UNIQUE NESTED MODELS (Service-specific data structures)
+# ==============================================================================
+
+# --- Unique to Income Certificate (Service 2) ---
+class IncomeDetails(BaseModel):
+    """Specific breakdown of income sources for the Income Certificate."""
+    income_on_lands: Optional[str] = None
+    income_on_business: Optional[str] = None
+    income_on_buildings: Optional[str] = None
+    income_on_labour: Optional[str] = None
+    salary_wife_husband: Optional[str] = Field(default=None, description="Consolidated salary of both wife and husband.")
+    income_on_other_sources: Optional[str] = None
+    total_gross_income: str = Field(description="The final calculated total annual income.")
+
+# --- Unique to EWS Certificate (Service 4) ---
+class AssetDetailsEWS(BaseModel):
+    """Specific asset breakdown for the EWS Certificate."""
+    agriculture_land: Optional[str] = Field(default=None, description="Size/value of agricultural land.")
+    residential_flat: Optional[str] = Field(default=None, description="Size/value of residential flat.")
+    residential_plot_municipality: Optional[str] = Field(default=None, description="Size/value of residential plot/municipality plot.")
+    gross_annual_income: str
+
+# --- Unique to Family Member Certificate (Service 5) ---
+class FamilyMember(BaseModel):
+    """Details of a single family member of the deceased HOF."""
+    name: str
+    gender: str
+    age: Optional[int] = None
+    relationship_with_hof: str
+
+class DeceasedHOFDetails(BaseModel):
+    """Details about the deceased Head of Family for the Family Member Certificate."""
+    deceased_hof_name: str
+    father_husband_name: str
+    date_of_death: str
+    reason_for_death: Optional[str] = None
+    occupation: Optional[str] = None
+    aadhaar_number: Optional[str] = None
+    place_of_death: Optional[str] = None
+
+
+# ==============================================================================
+# 3. FINAL SERVICE SUMMARY SCHEMAS (5 distinct models)
+# ==============================================================================
+
+# --- 1. Integrated Certificate (Community, Nativity, DOB) ---
+class IntegratedCertificateSummary(ApplicantCommon):
+    """Schema for Community, Nativity, and DOB Certificate."""
+    ration_card_number: Optional[str] = None
+    community: str
+    nativity: str
+    family_income: str
+    key_details: Optional[str] = None
+    issuer_authority: Optional[str] = None
+    date_of_issue: Optional[str] = None
+    source_documents: List[SourceDocument]
+
+# --- 2. Income Certificate ---
+class IncomeCertificateSummary(ApplicantCommon):
+    """Schema for Income Certificate."""
+    ration_card_number: Optional[str] = None
+    key_details: Optional[str] = None
+    income_details: IncomeDetails = Field(description="Detailed breakdown of all income sources.")
+    issuer_authority: Optional[str] = None
+    date_of_issue: Optional[str] = None
+    source_documents: List[SourceDocument]
+
+# --- 3. OBC Certificate ---
+class OBCCertificateSummary(ApplicantCommon):
+    """Schema for OBC Certificate."""
+    caste: str
+    sub_caste: Optional[str] = None
+    family_income: str
+    key_details: Optional[str] = None
+    issuer_authority: Optional[str] = None
+    date_of_issue: Optional[str] = None
+    source_documents: List[SourceDocument]
+
+# --- 4. EWS Income & Asset Certificate ---
+class EWSCertificateSummary(ApplicantCommon):
+    """Schema for EWS Income & Asset Certificate."""
+    ration_card_number: Optional[str] = None
+    community: str
+    key_details: Optional[str] = None
+    asset_details: AssetDetailsEWS = Field(description="Breakdown of specific assets and gross income.")
+    issuer_authority: Optional[str] = None
+    date_of_issue: Optional[str] = None
+    source_documents: List[SourceDocument]
+
+# --- 5. Family Member Certificate ---
+class FamilyMemberCertificateSummary(ApplicantCommon):
+    """Schema for Family Member Certificate."""
+    deceased_details: DeceasedHOFDetails
+    family_members_of_hof: List[FamilyMember] = Field(description="List of living family members and their relationship to the HOF.")
+    key_details: Optional[str] = None
+    issuer_authority: Optional[str] = None
+    date_of_issue: Optional[str] = None
+    source_documents: List[SourceDocument]
