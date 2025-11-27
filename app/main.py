@@ -1,7 +1,11 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from typing import List, Annotated
 import uvicorn
 import logging
+import json
+from pathlib import Path
 from app.logging_config import setup_logging, get_logger
 from app.extractor import GeminiExtractor, ExtractionError
 from app.models import (
@@ -12,11 +16,18 @@ from app.models import (
     FamilyMemberCertificateSummary
 )
 
+# Setup for UI
+app = FastAPI(title="Document Validation Service")
+import os
+current_dir = os.path.dirname(__file__)
+parent_dir = os.path.dirname(current_dir)
+app.mount("/static", StaticFiles(directory=os.path.join(parent_dir, "static")), name="static")
+templates = Jinja2Templates(directory=os.path.join(parent_dir, "templates"))
+
 # Setup logging
 setup_logging(log_level="DEBUG", log_file="logs/app.log")
 logger = get_logger(__name__)
 
-app = FastAPI(title="Document Validation Service")
 logger.info("Document Validation Service initialized")
 
 extractor = GeminiExtractor()
@@ -54,6 +65,21 @@ async def extract_summary(
         logger.info(f"Starting extraction for application type: {application_type}")
         result = extractor.extract(application_type, file_data_list)
         logger.info(f"Extraction completed successfully for application type: {application_type}")
+
+        # Store the result in a file
+        output_dir = Path("extracted_results")
+        output_dir.mkdir(exist_ok=True)
+
+        # Create a unique filename based on application type and first file name
+        first_filename = Path(file_data_list[0]["filename"]).stem
+        output_filename = f"{application_type.replace(' ', '_')}_{first_filename}_{len(file_data_list)}files.json"
+        output_file_path = output_dir / output_filename
+
+        with open(output_file_path, 'w', encoding='utf-8') as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
+
+        logger.info(f"Results stored in: {output_file_path}")
+
         return result
     except ExtractionError as e:
         logger.error(f"ExtractionError in extract_summary: {str(e)}", exc_info=True)
@@ -61,6 +87,10 @@ async def extract_summary(
     except Exception as e:
         logger.error(f"Unexpected error in extract_summary: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+@app.get("/")
+async def read_root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/health")
 def health_check():
