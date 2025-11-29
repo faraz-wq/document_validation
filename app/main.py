@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from typing import List, Annotated
@@ -142,7 +143,7 @@ async def submit_document(
         
         # Determine file type for the template
         file_type = "pdf" if file.content_type == "application/pdf" else "image"
-        file_url = f"/static/uploads/{filename}"
+        file_url = f"/view-document/{filename}"
         
         return templates.TemplateResponse(
             "results.html", 
@@ -159,6 +160,27 @@ async def submit_document(
         logger.error(f"Error during processing: {e}")
         return templates.TemplateResponse("index.html", {"request": request, "error": f"Error processing document: {str(e)}"})
 
+
+@app.get("/view-document/{filename}")
+async def view_document(filename: str):
+    file_path = Path(parent_dir) / "static" / "uploads" / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Determine media type
+    media_type = "application/octet-stream"
+    if filename.lower().endswith(".pdf"):
+        media_type = "application/pdf"
+    elif filename.lower().endswith((".jpg", ".jpeg")):
+        media_type = "image/jpeg"
+    elif filename.lower().endswith(".png"):
+        media_type = "image/png"
+        
+    return FileResponse(
+        path=file_path, 
+        media_type=media_type, 
+        headers={"Content-Disposition": "inline"}
+    )
 
 @app.get("/")
 async def read_root(request: Request):
