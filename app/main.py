@@ -21,6 +21,16 @@ from app.models import (
 
 # Setup for UI
 app = FastAPI(title="Document Validation Service")
+ 
+from fastapi.middleware.cors import CORSMiddleware
+ 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # For development convenience, allow all. In prod, specify domains.
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 import os
 current_dir = os.path.dirname(__file__)
 parent_dir = os.path.dirname(current_dir)
