@@ -164,7 +164,22 @@ class GeminiExtractor:
             validated_data = schema_class(**data)
             logger.info("Pydantic validation passed successfully")
 
-            return validated_data.model_dump()
+            # Extract token usage information
+            token_usage = {}
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                token_usage = {
+                    'prompt_token_count': response.usage_metadata.prompt_token_count,
+                    'candidates_token_count': response.usage_metadata.candidates_token_count,
+                    'total_token_count': response.usage_metadata.total_token_count,
+                }
+                logger.info(f"Token usage - Prompt: {token_usage['prompt_token_count']}, "
+                          f"Response: {token_usage['candidates_token_count']}, "
+                          f"Total: {token_usage['total_token_count']}")
+            
+            result = validated_data.model_dump()
+            result['_token_usage'] = token_usage
+            
+            return result
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON response from Gemini: {str(e)}")

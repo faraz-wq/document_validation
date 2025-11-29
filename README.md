@@ -8,38 +8,71 @@ This service uses Google Vertex AI (Gemini 1.5 Pro) to extract structured data f
 - **Structured Extraction**: Returns JSON conforming to strict Pydantic models.
 - **Schema Validation**: Enforces data types and required fields.
 - **Source Traceability**: Links extracted data back to source files.
+- **Modern React UI**: Beautiful, responsive interface with drag & drop support.
+
+## Project Structure
+
+```
+document_validation/
+├── app/                    # FastAPI backend
+│   ├── main.py            # API endpoints
+│   ├── extractor.py       # Gemini extraction logic
+│   ├── models.py          # Pydantic schemas
+│   └── logging_config.py  # Logging setup
+├── frontend/              # React frontend
+│   ├── src/
+│   │   ├── components/    # React components
+│   │   ├── App.jsx        # Main app
+│   │   └── index.css      # Global styles
+│   └── package.json
+├── templates/             # Legacy HTML templates (deprecated)
+├── tests/                 # Unit tests
+└── requirements.txt       # Python dependencies
+```
 
 ## Prerequisites
 
 - Python 3.10+
-- Google Cloud Project with Vertex AI API enabled.
-- `gcloud` CLI installed and authenticated (or Service Account key).
+- Node.js 16+
+- Google Cloud Project with Vertex AI API enabled
+- `gcloud` CLI installed and authenticated (or Service Account key)
 
 ## Installation
 
-1. Clone the repository.
-2. Install dependencies:
+### Backend Setup
+
+1. Clone the repository
+2. Install Python dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-## Configuration
+3. Set environment variables:
+   ```bash
+   export GOOGLE_CLOUD_PROJECT=your-project-id
+   export GOOGLE_CLOUD_LOCATION=us-central1
+   ```
 
-Set the following environment variables (or use a `.env` file):
+   If running locally without `gcloud auth application-default login`:
+   ```bash
+   export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+   ```
 
-```bash
-GOOGLE_CLOUD_PROJECT=your-project-id
-GOOGLE_CLOUD_LOCATION=us-central1 # or your preferred region
-```
+### Frontend Setup
 
-If running locally without `gcloud auth application-default login`, set:
-```bash
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
-```
+1. Navigate to the frontend directory:
+   ```bash
+   cd frontend
+   ```
 
-## Running the Service
+2. Install Node dependencies:
+   ```bash
+   npm install
+   ```
 
-Start the FastAPI server:
+## Running the Application
+
+### Start the Backend
 
 ```bash
 uvicorn app.main:app --reload
@@ -47,6 +80,25 @@ uvicorn app.main:app --reload
 
 The API will be available at `http://localhost:8000`.
 Interactive API docs: `http://localhost:8000/docs`.
+
+### Start the Frontend
+
+In a separate terminal:
+
+```bash
+cd frontend
+npm run dev
+```
+
+The React app will be available at `http://localhost:3000`.
+
+## Using the Application
+
+1. Open `http://localhost:3000` in your browser
+2. Select an application type from the dropdown
+3. Upload a document (PDF, JPG, or PNG) via drag & drop or file browser
+4. Click "Validate Document" to process
+5. View the extracted data alongside the document preview
 
 ## API Usage
 
@@ -59,7 +111,7 @@ Interactive API docs: `http://localhost:8000/docs`.
   - "OBC Certificate"
   - "EWS Certificate"
   - "Family Member Certificate"
-- `files` (list of files): The documents to process.
+- `files` (list of files): The documents to process
 
 **Example (using curl):**
 
@@ -82,5 +134,6 @@ python3 -m pytest tests/
 
 ## Extending
 
-1. **Add new schemas**: Define new Pydantic models in `app/models.py`.
-2. **Update Extractor**: Add the new type mapping in `app/extractor.py` inside `_get_schema_for_type`.
+1. **Add new schemas**: Define new Pydantic models in `app/models.py`
+2. **Update Extractor**: Add the new type mapping in `app/extractor.py` inside `_get_schema_for_type`
+3. **Update Frontend**: Add the new type to `APPLICATION_TYPES` in `frontend/src/components/UploadForm.jsx`

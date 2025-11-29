@@ -9,7 +9,7 @@ const ResultsView = ({ summary, file, onReset }) => {
         let items = [];
 
         for (const [key, value] of Object.entries(obj)) {
-            if (key === 'source_documents') continue;
+            if (key === 'source_documents' || key === '_token_usage') continue;
 
             const label = prefix ? `${prefix} ${key.replace(/_/g, ' ')}` : key.replace(/_/g, ' ');
 
@@ -44,13 +44,28 @@ const ResultsView = ({ summary, file, onReset }) => {
     const leftColumn = allFields.slice(0, midpoint);
     const rightColumn = allFields.slice(midpoint);
 
+    // Extract token usage if available
+    const tokenUsage = summary?._token_usage;
+
     return (
         <div className="results-container">
             <div className="results-header">
                 <h2 className="results-title">Validation Results</h2>
-                <button onClick={onReset} className="reset-btn">
-                    Upload New Document
-                </button>
+                <div className="header-actions">
+                    {tokenUsage && tokenUsage.total_token_count && (
+                        <div className="token-counter">
+                            <span className="token-label">Tokens:</span>
+                            <span className="token-value">{tokenUsage.total_token_count.toLocaleString()}</span>
+                            <span className="token-detail">
+                                (↑{tokenUsage.prompt_token_count.toLocaleString()}
+                                ↓{tokenUsage.candidates_token_count.toLocaleString()})
+                            </span>
+                        </div>
+                    )}
+                    <button onClick={onReset} className="reset-btn">
+                        Upload New Document
+                    </button>
+                </div>
             </div>
 
             <div className="split-view">

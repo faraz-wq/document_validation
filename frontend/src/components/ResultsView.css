@@ -23,6 +23,39 @@
     color: var(--text-primary);
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.token-counter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 2px;
+    font-size: 0.85rem;
+}
+
+.token-label {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.token-value {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.token-detail {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    margin-left: 4px;
+}
+
 .reset-btn {
     padding: 8px 16px;
     border-radius: 2px;
