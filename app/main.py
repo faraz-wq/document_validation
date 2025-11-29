@@ -5,6 +5,8 @@ from typing import List, Annotated
 import uvicorn
 import logging
 import json
+import shutil
+import os
 from pathlib import Path
 from app.logging_config import setup_logging, get_logger
 from app.extractor import GeminiExtractor, ExtractionError
@@ -87,6 +89,76 @@ async def extract_summary(
     except Exception as e:
         logger.error(f"Unexpected error in extract_summary: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+@app.post("/submit")
+async def submit_document(
+    request: Request,
+    application_type: Annotated[str, Form(..., description="Type of application service")],
+    files: List[UploadFile] = File(..., description="List of document files")
+):
+    """
+    Handle form submission, save file, extract data, and render results page.
+    """
+    logger.info(f"Received submission for: {application_type}")
+    
+    if not files:
+        return templates.TemplateResponse("index.html", {"request": request, "error": "No files uploaded"})
+
+    # Process the first file for preview (current UI limitation, can expand later)
+    file = files[0]
+    filename = file.filename
+    
+    # Ensure uploads directory exists
+    uploads_dir = Path(parent_dir) / "static" / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    
+    file_path = uploads_dir / filename
+    
+    # Save the file
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        logger.info(f"Saved file to {file_path}")
+    except Exception as e:
+        logger.error(f"Failed to save file: {e}")
+        return templates.TemplateResponse("index.html", {"request": request, "error": "Failed to save file"})
+        
+    # Reset file pointer for extraction reading
+    # Actually, we saved it, so we can read it back or just use the saved file
+    # The extractor expects a list of dicts with 'content' as bytes
+    
+    try:
+        with open(file_path, "rb") as f:
+            content = f.read()
+            
+        file_data_list = [{
+            "filename": filename,
+            "content": content,
+            "mime_type": file.content_type
+        }]
+        
+        logger.info("Starting extraction...")
+        result = extractor.extract(application_type, file_data_list)
+        
+        # Determine file type for the template
+        file_type = "pdf" if file.content_type == "application/pdf" else "image"
+        file_url = f"/static/uploads/{filename}"
+        
+        return templates.TemplateResponse(
+            "results.html", 
+            {
+                "request": request, 
+                "summary": result, 
+                "file_url": file_url, 
+                "file_type": file_type,
+                "filename": filename
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error during processing: {e}")
+        return templates.TemplateResponse("index.html", {"request": request, "error": f"Error processing document: {str(e)}"})
+
 
 @app.get("/")
 async def read_root(request: Request):

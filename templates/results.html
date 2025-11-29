@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validation Results</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .main-container {
+            height: 100vh;
+        }
+
+        .panel {
+            height: 100vh;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .preview-container {
+            height: 100%;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        iframe,
+        img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .table-key {
+            width: 40%;
+            font-weight: 600;
+            background-color: #f8f9fa;
+        }
+
+        .nested-table {
+            margin-bottom: 0;
+        }
+
+        .nested-table td,
+        .nested-table th {
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-fluid main-container">
+        <div class="row g-0 h-100">
+            <!-- Left Panel: Document Preview -->
+            <div class="col-md-6 panel border-end bg-light">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h4>Document Preview</h4>
+                    <a href="/" class="btn btn-outline-secondary btn-sm">Upload New</a>
+                </div>
+                <div class="preview-container">
+                    {% if file_type == 'pdf' %}
+                    <iframe src="{{ file_url }}" type="application/pdf"></iframe>
+                    {% else %}
+                    <img src="{{ file_url }}" alt="Document Preview">
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Right Panel: Summary -->
+            <div class="col-md-6 panel">
+                <h4 class="mb-4">Extraction Summary</h4>
+
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        Extracted Data
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-bordered mb-0">
+                            <tbody>
+                                {% for key, value in summary.items() %}
+                                {% if key != 'source_documents' %}
+                                <tr>
+                                    <td class="table-key">{{ key.replace('_', ' ').title() }}</td>
+                                    <td>
+                                        {% if value is mapping %}
+                                        <!-- Nested Dictionary (e.g. income_details) -->
+                                        <table class="table table-sm table-striped nested-table">
+                                            {% for sub_key, sub_value in value.items() %}
+                                            <tr>
+                                                <td width="50%"><strong>{{ sub_key.replace('_', ' ').title() }}</strong>
+                                                </td>
+                                                <td>{{ sub_value if sub_value is not none else '-' }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </table>
+                                        {% elif value is iterable and value is not string %}
+                                        <!-- List (e.g. family_members) -->
+                                        {% if value %}
+                                        {% for item in value %}
+                                        <div class="mb-2 border-bottom pb-2">
+                                            {% if item is mapping %}
+                                            {% for sub_key, sub_value in item.items() %}
+                                            <div><strong>{{ sub_key.replace('_', ' ').title() }}:</strong> {{ sub_value
+                                                }}</div>
+                                            {% endfor %}
+                                            {% else %}
+                                            {{ item }}
+                                            {% endif %}
+                                        </div>
+                                        {% endfor %}
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                        {% else %}
+                                        <!-- Simple Value -->
+                                        {{ value if value is not none else '-' }}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Source Documents Section -->
+                {% if summary.source_documents %}
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        Source Documents
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Document Title</th>
+                                    <th>Filename</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for doc in summary.source_documents %}
+                                <tr>
+                                    <td>{{ doc.document_title }}</td>
+                                    <td>{{ doc.filename }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

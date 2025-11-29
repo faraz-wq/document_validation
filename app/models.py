@@ -16,11 +16,11 @@ class SourceDocument(BaseModel):
 
 class ApplicantCommon(BaseModel):
     """Common details required for most applications."""
-    applicant_name: str
-    fathers_name: str
-    address: str = Field(description="Consolidated full address.")
-    gender: str
-    age_dob: str = Field(description="Age or Date of Birth (DD/MM/YYYY).")
+    applicant_name: Optional[str] = None
+    fathers_name: Optional[str] = None
+    address: Optional[str] = Field(default=None, description="Consolidated full address.")
+    gender: Optional[str] = None
+    age_dob: Optional[str] = Field(default=None, description="Age or Date of Birth (DD/MM/YYYY).")
     phone_number: Optional[str] = None
     
 # ==============================================================================
@@ -36,7 +36,7 @@ class IncomeDetails(BaseModel):
     income_on_labour: Optional[str] = None
     salary_wife_husband: Optional[str] = Field(default=None, description="Consolidated salary of both wife and husband.")
     income_on_other_sources: Optional[str] = None
-    total_gross_income: str = Field(description="The final calculated total annual income.")
+    total_gross_income: Optional[str] = Field(default=None, description="The final calculated total annual income.")
 
 # --- Unique to EWS Certificate (Service 4) ---
 class AssetDetailsEWS(BaseModel):
@@ -44,7 +44,7 @@ class AssetDetailsEWS(BaseModel):
     agriculture_land: Optional[str] = Field(default=None, description="Size/value of agricultural land.")
     residential_flat: Optional[str] = Field(default=None, description="Size/value of residential flat.")
     residential_plot_municipality: Optional[str] = Field(default=None, description="Size/value of residential plot/municipality plot.")
-    gross_annual_income: str
+    gross_annual_income: Optional[str] = None
 
 # --- Unique to Family Member Certificate (Service 5) ---
 class FamilyMember(BaseModel):
@@ -73,9 +73,9 @@ class DeceasedHOFDetails(BaseModel):
 class IntegratedCertificateSummary(ApplicantCommon):
     """Schema for Community, Nativity, and DOB Certificate."""
     ration_card_number: Optional[str] = None
-    community: str
-    nativity: str
-    family_income: str
+    community: Optional[str] = None
+    nativity: Optional[str] = None
+    family_income: Optional[str] = None
     key_details: Optional[str] = None
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
@@ -94,9 +94,9 @@ class IncomeCertificateSummary(ApplicantCommon):
 # --- 3. OBC Certificate ---
 class OBCCertificateSummary(ApplicantCommon):
     """Schema for OBC Certificate."""
-    caste: str
+    caste: Optional[str] = None
     sub_caste: Optional[str] = None
-    family_income: str
+    family_income: Optional[str] = None
     key_details: Optional[str] = None
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
@@ -106,7 +106,7 @@ class OBCCertificateSummary(ApplicantCommon):
 class EWSCertificateSummary(ApplicantCommon):
     """Schema for EWS Income & Asset Certificate."""
     ration_card_number: Optional[str] = None
-    community: str
+    community: Optional[str] = None
     key_details: Optional[str] = None
     asset_details: AssetDetailsEWS = Field(description="Breakdown of specific assets and gross income.")
     issuer_authority: Optional[str] = None
