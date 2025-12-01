@@ -1,9 +1,12 @@
 import React from 'react';
 import './ResultsView.css';
 
-const ResultsView = ({ summary, file, onReset }) => {
-    const fileUrl = file ? URL.createObjectURL(file) : null;
-    const isPdf = file?.type === 'application/pdf';
+const ResultsView = ({ summary, files, onReset }) => {
+    const [selectedFileIndex, setSelectedFileIndex] = React.useState(0);
+
+    const currentFile = files && files.length > 0 ? files[selectedFileIndex] : null;
+    const fileUrl = currentFile ? URL.createObjectURL(currentFile) : null;
+    const isPdf = currentFile?.type === 'application/pdf';
 
     const flattenObject = (obj, prefix = '') => {
         let items = [];
@@ -70,7 +73,24 @@ const ResultsView = ({ summary, file, onReset }) => {
 
             <div className="split-view">
                 <div className="preview-panel">
-                    <div className="panel-header">Document Preview</div>
+                    <div className="panel-header">
+                        Document Preview
+                        {files && files.length > 1 && (
+                            <div className="file-selector">
+                                <select
+                                    value={selectedFileIndex}
+                                    onChange={(e) => setSelectedFileIndex(Number(e.target.value))}
+                                    className="file-select"
+                                >
+                                    {files.map((f, idx) => (
+                                        <option key={idx} value={idx}>
+                                            {f.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
                     <div className="preview-content">
                         {fileUrl && (
                             isPdf ? (

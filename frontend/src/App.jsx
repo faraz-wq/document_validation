@@ -5,18 +5,21 @@ import ResultsView from './components/ResultsView';
 
 function App() {
   const [step, setStep] = useState('upload'); // upload, processing, results
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [summary, setSummary] = useState(null);
   const [error, setError] = useState(null);
 
-  const handleUpload = async (appType, selectedFile) => {
+  const handleUpload = async (appType, selectedFiles) => {
     setStep('processing');
     setError(null);
-    setFile(selectedFile);
+    setFiles(selectedFiles);
 
     const formData = new FormData();
     formData.append('application_type', appType);
-    formData.append('files', selectedFile);
+
+    selectedFiles.forEach(file => {
+      formData.append('files', file);
+    });
 
     try {
       // Using relative path - Vite proxy will forward to localhost:8000
@@ -37,7 +40,7 @@ function App() {
 
   const handleReset = () => {
     setStep('upload');
-    setFile(null);
+    setFiles([]);
     setSummary(null);
     setError(null);
   };
@@ -53,7 +56,7 @@ function App() {
       ) : (
         <ResultsView
           summary={summary}
-          file={file}
+          files={files}
           onReset={handleReset}
         />
       )}

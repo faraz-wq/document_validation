@@ -11,7 +11,7 @@ const APPLICATION_TYPES = [
 
 const UploadForm = ({ onSubmit, isLoading, error }) => {
     const [appType, setAppType] = useState('');
-    const [file, setFile] = useState(null);
+    const [files, setFiles] = useState([]);
     const [dragActive, setDragActive] = useState(false);
     const inputRef = useRef(null);
 
@@ -29,15 +29,15 @@ const UploadForm = ({ onSubmit, isLoading, error }) => {
         e.preventDefault();
         e.stopPropagation();
         setDragActive(false);
-        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            setFile(e.dataTransfer.files[0]);
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            setFiles(Array.from(e.dataTransfer.files));
         }
     };
 
     const handleChange = (e) => {
         e.preventDefault();
-        if (e.target.files && e.target.files[0]) {
-            setFile(e.target.files[0]);
+        if (e.target.files && e.target.files.length > 0) {
+            setFiles(Array.from(e.target.files));
         }
     };
 
@@ -45,10 +45,15 @@ const UploadForm = ({ onSubmit, isLoading, error }) => {
         inputRef.current.click();
     };
 
+    const removeFile = (index, e) => {
+        e.stopPropagation();
+        setFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (appType && file) {
-            onSubmit(appType, file);
+        if (appType && files.length > 0) {
+            onSubmit(appType, files);
         }
     };
 
@@ -56,7 +61,7 @@ const UploadForm = ({ onSubmit, isLoading, error }) => {
         <div className="upload-container">
             <div className="glass-card">
                 <h1 className="title">Document Validation</h1>
-                <p className="subtitle">Upload your certificate for instant validation and extraction.</p>
+                <p className="subtitle">Upload your certificates for instant validation and extraction.</p>
 
                 {error && <div className="error-message">{error}</div>}
 
@@ -78,7 +83,7 @@ const UploadForm = ({ onSubmit, isLoading, error }) => {
                     </div>
 
                     <div
-                        className={`drop-zone ${dragActive ? 'drag-active' : ''} ${file ? 'has-file' : ''}`}
+                        className={`drop-zone ${dragActive ? 'drag-active' : ''} ${files.length > 0 ? 'has-file' : ''}`}
                         onDragEnter={handleDrag}
                         onDragLeave={handleDrag}
                         onDragOver={handleDrag}
@@ -91,19 +96,31 @@ const UploadForm = ({ onSubmit, isLoading, error }) => {
                             className="file-input"
                             onChange={handleChange}
                             accept=".pdf,image/*"
+                            multiple
                         />
                         <div className="drop-content">
-                            {file ? (
-                                <div className="file-info">
-                                    <span className="file-icon">📄</span>
-                                    <span className="file-name">{file.name}</span>
-                                    <span className="change-file">(Click to change)</span>
+                            {files.length > 0 ? (
+                                <div className="file-list">
+                                    {files.map((file, index) => (
+                                        <div key={index} className="file-info-item">
+                                            <span className="file-icon">📄</span>
+                                            <span className="file-name">{file.name}</span>
+                                            <button
+                                                type="button"
+                                                className="remove-file-btn"
+                                                onClick={(e) => removeFile(index, e)}
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <div className="add-more-hint">(Click to add/change files)</div>
                                 </div>
                             ) : (
                                 <>
                                     <span className="upload-icon">☁️</span>
-                                    <p>Drag & Drop your file here or <span className="highlight">Browse</span></p>
-                                    <p className="support-text">Supports PDF, JPG, PNG</p>
+                                    <p>Drag & Drop your files here or <span className="highlight">Browse</span></p>
+                                    <p className="support-text">Supports PDF, JPG, PNG (Multiple files allowed)</p>
                                 </>
                             )}
                         </div>
@@ -112,9 +129,9 @@ const UploadForm = ({ onSubmit, isLoading, error }) => {
                     <button
                         type="submit"
                         className={`submit-btn ${isLoading ? 'loading' : ''}`}
-                        disabled={!appType || !file || isLoading}
+                        disabled={!appType || files.length === 0 || isLoading}
                     >
-                        {isLoading ? 'Processing...' : 'Validate Document'}
+                        {isLoading ? 'Processing...' : `Validate ${files.length > 0 ? `${files.length} Document${files.length > 1 ? 's' : ''}` : 'Document'}`}
                     </button>
                 </form>
             </div>
