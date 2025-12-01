@@ -9,7 +9,7 @@ const APPLICATION_TYPES = [
     "Family Member Certificate"
 ];
 
-const UploadForm = ({ onSubmit, isLoading, error }) => {
+const UploadForm = ({ onSubmit, isLoading, error, onShowSessions }) => {
     const [appType, setAppType] = useState('');
     const [files, setFiles] = useState([]);
     const [dragActive, setDragActive] = useState(false);
@@ -60,8 +60,21 @@ const UploadForm = ({ onSubmit, isLoading, error }) => {
     return (
         <div className="upload-container">
             <div className="glass-card">
-                <h1 className="title">Document Validation</h1>
-                <p className="subtitle">Upload your certificates for instant validation and extraction.</p>
+                <div className="header-with-sessions">
+                    <div>
+                        <h1 className="title">Document Validation</h1>
+                        <p className="subtitle">Upload your certificates for instant validation and extraction.</p>
+                    </div>
+                    {onShowSessions && (
+                        <button
+                            className="sessions-btn"
+                            onClick={onShowSessions}
+                            type="button"
+                        >
+                            📋 Sessions
+                        </button>
+                    )}
+                </div>
 
                 {error && <div className="error-message">{error}</div>}
 

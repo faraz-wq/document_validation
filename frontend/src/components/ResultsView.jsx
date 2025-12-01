@@ -1,5 +1,6 @@
 import React from 'react';
 import './ResultsView.css';
+import PDFViewerWithBoxes from './PDFViewerWithBoxes';
 
 const ResultsView = ({ summary, files, onReset }) => {
     const [selectedFileIndex, setSelectedFileIndex] = React.useState(0);
@@ -157,26 +158,25 @@ const ResultsView = ({ summary, files, onReset }) => {
                     </div>
                     <div className="preview-content" ref={previewRef}>
                         {fileUrl && (
-                            <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                {isPdf ? (
-                                    <iframe
-                                        src={fileUrl}
-                                        title="Document Preview"
-                                        className="preview-frame"
-                                        onLoad={handlePreviewLoad}
-                                    />
-                                ) : (
+                            isPdf ? (
+                                <PDFViewerWithBoxes
+                                    fileUrl={fileUrl}
+                                    boundingBox={activeBoundingBox && activeBoundingBox.filename === currentFile?.name ? activeBoundingBox : null}
+                                    onLoadDimensions={setDocumentDimensions}
+                                />
+                            ) : (
+                                <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <img
                                         src={fileUrl}
                                         alt="Document Preview"
                                         className="preview-image"
                                         onLoad={handlePreviewLoad}
                                     />
-                                )}
-                                {activeBoundingBox && activeBoundingBox.filename === currentFile?.name && (
-                                    <div style={getBoundingBoxStyle(activeBoundingBox)} className="bounding-box-highlight" />
-                                )}
-                            </div>
+                                    {activeBoundingBox && activeBoundingBox.filename === currentFile?.name && (
+                                        <div style={getBoundingBoxStyle(activeBoundingBox)} className="bounding-box-highlight" />
+                                    )}
+                                </div>
+                            )
                         )}
                     </div>
                 </div>

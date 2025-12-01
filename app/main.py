@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 from app.logging_config import setup_logging, get_logger
 from app.extractor import GeminiExtractor, ExtractionError
+from app.database import db
 from app.models import (
     IntegratedCertificateSummary,
     IncomeCertificateSummary,
@@ -79,7 +80,7 @@ async def extract_summary(
         result = extractor.extract(application_type, file_data_list)
         logger.info(f"Extraction completed successfully for application type: {application_type}")
 
-        # Store the result in a file
+        # Store the result in a file (for backward compatibility)
         output_dir = Path("extracted_results")
         output_dir.mkdir(exist_ok=True)
 
@@ -92,6 +93,19 @@ async def extract_summary(
             json.dump(result, f, indent=2, ensure_ascii=False)
 
         logger.info(f"Results stored in: {output_file_path}")
+        
+        # Store in database
+        try:
+            session_id = db.create_session(
+                application_type=application_type,
+                summary=result.copy(),  # Make a copy since create_session modifies it
+                files=file_data_list
+            )
+            result['session_id'] = session_id
+            logger.info(f"Session created with ID: {session_id}")
+        except Exception as db_error:
+            logger.error(f"Failed to store session in database: {db_error}", exc_info=True)
+            # Continue even if database storage fails
 
         return result
     except ExtractionError as e:
@@ -200,6 +214,74 @@ async def read_root(request: Request):
 def health_check():
     logger.info("Health check endpoint accessed")
     return {"status": "ok"}
+
+@app.get("/sessions")
+def list_sessions(limit: int = 50):
+    """List recent sessions"""
+    try:
+        sessions = db.list_sessions(limit=limit)
+        return {"sessions": sessions}
+    except Exception as e:
+        logger.error(f"Error listing sessions: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/sessions/{session_id}")
+def get_session(session_id: str):
+    """Retrieve a specific session with all data"""
+    try:
+        session_data = db.get_session(session_id)
+        if not session_data:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return session_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving session {session_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/sessions/{session_id}/document/{filename}")
+def get_session_document(session_id: str, filename: str):
+    """Retrieve a specific document from a session"""
+    try:
+        session_data = db.get_session(session_id)
+        if not session_data:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Find the document
+        document = next(
+            (doc for doc in session_data['documents'] if doc['filename'] == filename),
+            None
+        )
+        
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Return the document as a response
+        from fastapi.responses import Response
+        return Response(
+            content=document['content'],
+            media_type=document['mime_type'] or 'application/octet-stream',
+            headers={"Content-Disposition": f"inline; filename={filename}"}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving document: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: str):
+    """Delete a session"""
+    try:
+        success = db.delete_session(session_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return {"message": "Session deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting session {session_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.on_event("startup")
 async def startup_event():

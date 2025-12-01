@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import UploadForm from './components/UploadForm';
 import ResultsView from './components/ResultsView';
+import SessionsList from './components/SessionsList';
 
 function App() {
   const [step, setStep] = useState('upload'); // upload, processing, results
   const [files, setFiles] = useState([]);
   const [summary, setSummary] = useState(null);
   const [error, setError] = useState(null);
+  const [showSessions, setShowSessions] = useState(false);
 
   const handleUpload = async (appType, selectedFiles) => {
     setStep('processing');
@@ -38,6 +40,13 @@ function App() {
     }
   };
 
+  const handleLoadSession = (sessionSummary, sessionFiles) => {
+    setSummary(sessionSummary);
+    setFiles(sessionFiles);
+    setStep('results');
+    setShowSessions(false);
+  };
+
   const handleReset = () => {
     setStep('upload');
     setFiles([]);
@@ -52,12 +61,20 @@ function App() {
           onSubmit={handleUpload}
           isLoading={step === 'processing'}
           error={error}
+          onShowSessions={() => setShowSessions(true)}
         />
       ) : (
         <ResultsView
           summary={summary}
           files={files}
           onReset={handleReset}
+        />
+      )}
+
+      {showSessions && (
+        <SessionsList
+          onLoadSession={handleLoadSession}
+          onClose={() => setShowSessions(false)}
         />
       )}
     </>
