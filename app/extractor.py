@@ -61,7 +61,8 @@ class GeminiExtractor:
         2. Extract the fields defined in the schema.
         3. If a field is not found in the documents, use null (None) if it is optional. If it is required but missing, try to infer it from context if safe, otherwise fail or return a clear error indicator (but prefer returning the JSON with nulls where allowed).
         4. Populate 'source_documents' with the filename and inferred document title (e.g., 'Aadhaar Card', 'Application Form') for each file you processed that contributed data.
-        5. Return ONLY the valid JSON object. Do not include markdown formatting like ```json ... ```.
+        5. Populate the 'citations' dictionary. For EVERY extracted field (including nested ones), add an entry where the key is the field name (using dot notation, e.g., 'applicant_name', 'income_details.total_gross_income') and the value is the source string containing the "Filename (Page X)". Example: "applicant_name": "application_form.pdf (Page 1)".
+        6. Return ONLY the valid JSON object. Do not include markdown formatting like ```json ... ```.
         """
 
         logger.debug(f"Prompt created with length: {len(prompt)} characters")

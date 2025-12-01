@@ -185,3 +185,11 @@
     color: var(--text-secondary);
     font-style: italic;
 }
+
+.citation-text {
+    font-size: 0.75rem;
+    color: var(--primary-color);
+    margin-top: 2px;
+    font-style: italic;
+    opacity: 0.8;
+}

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 # ==============================================================================
 # 1. COMMON NESTED MODELS (Reusable across all services for consistency)
@@ -80,6 +80,10 @@ class IntegratedCertificateSummary(ApplicantCommon):
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
     source_documents: List[SourceDocument]
+    citations: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Map of field names to their source (filename and page number). Use dot notation for nested fields (e.g. 'applicant_name', 'income_details.total_gross_income')."
+    )
 
 # --- 2. Income Certificate ---
 class IncomeCertificateSummary(ApplicantCommon):
@@ -90,6 +94,10 @@ class IncomeCertificateSummary(ApplicantCommon):
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
     source_documents: List[SourceDocument]
+    citations: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Map of field names to their source (filename and page number). Use dot notation for nested fields."
+    )
 
 # --- 3. OBC Certificate ---
 class OBCCertificateSummary(ApplicantCommon):
@@ -101,6 +109,10 @@ class OBCCertificateSummary(ApplicantCommon):
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
     source_documents: List[SourceDocument]
+    citations: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Map of field names to their source (filename and page number). Use dot notation for nested fields."
+    )
 
 # --- 4. EWS Income & Asset Certificate ---
 class EWSCertificateSummary(ApplicantCommon):
@@ -112,6 +124,10 @@ class EWSCertificateSummary(ApplicantCommon):
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
     source_documents: List[SourceDocument]
+    citations: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Map of field names to their source (filename and page number). Use dot notation for nested fields."
+    )
 
 # --- 5. Family Member Certificate ---
 class FamilyMemberCertificateSummary(ApplicantCommon):
@@ -122,3 +138,7 @@ class FamilyMemberCertificateSummary(ApplicantCommon):
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
     source_documents: List[SourceDocument]
+    citations: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Map of field names to their source (filename and page number). Use dot notation for nested fields."
+    )

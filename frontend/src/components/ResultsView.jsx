@@ -8,34 +8,35 @@ const ResultsView = ({ summary, files, onReset }) => {
     const fileUrl = currentFile ? URL.createObjectURL(currentFile) : null;
     const isPdf = currentFile?.type === 'application/pdf';
 
-    const flattenObject = (obj, prefix = '') => {
+    const flattenObject = (obj, prefix = '', rawPrefix = '') => {
         let items = [];
 
         for (const [key, value] of Object.entries(obj)) {
-            if (key === 'source_documents' || key === '_token_usage') continue;
+            if (key === 'source_documents' || key === '_token_usage' || key === 'citations') continue;
 
             const label = prefix ? `${prefix} ${key.replace(/_/g, ' ')}` : key.replace(/_/g, ' ');
+            const rawKey = rawPrefix ? `${rawPrefix}.${key}` : key;
 
             if (value === null || value === undefined) {
-                items.push({ key: label, value: '-' });
+                items.push({ key: label, value: '-', rawKey });
             } else if (Array.isArray(value)) {
                 if (value.length === 0) {
-                    items.push({ key: label, value: '-' });
+                    items.push({ key: label, value: '-', rawKey });
                 } else {
                     value.forEach((item, idx) => {
                         if (typeof item === 'object' && item !== null) {
-                            const nestedItems = flattenObject(item, `${label} ${idx + 1}`);
+                            const nestedItems = flattenObject(item, `${label} ${idx + 1}`, `${rawKey}[${idx}]`);
                             items = items.concat(nestedItems);
                         } else {
-                            items.push({ key: `${label} ${idx + 1}`, value: String(item) });
+                            items.push({ key: `${label} ${idx + 1}`, value: String(item), rawKey: `${rawKey}[${idx}]` });
                         }
                     });
                 }
             } else if (typeof value === 'object') {
-                const nestedItems = flattenObject(value, label);
+                const nestedItems = flattenObject(value, label, rawKey);
                 items = items.concat(nestedItems);
             } else {
-                items.push({ key: label, value: String(value) });
+                items.push({ key: label, value: String(value), rawKey });
             }
         }
 
@@ -111,7 +112,14 @@ const ResultsView = ({ summary, files, onReset }) => {
                                     {leftColumn.map((item, idx) => (
                                         <tr key={idx}>
                                             <td className="key-cell">{item.key}</td>
-                                            <td className="value-cell">{item.value}</td>
+                                            <td className="value-cell">
+                                                {item.value}
+                                                {summary.citations && summary.citations[item.rawKey] && (
+                                                    <div className="citation-text">
+                                                        Source: {summary.citations[item.rawKey]}
+                                                    </div>
+                                                )}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -122,7 +130,14 @@ const ResultsView = ({ summary, files, onReset }) => {
                                     {rightColumn.map((item, idx) => (
                                         <tr key={idx}>
                                             <td className="key-cell">{item.key}</td>
-                                            <td className="value-cell">{item.value}</td>
+                                            <td className="value-cell">
+                                                {item.value}
+                                                {summary.citations && summary.citations[item.rawKey] && (
+                                                    <div className="citation-text">
+                                                        Source: {summary.citations[item.rawKey]}
+                                                    </div>
+                                                )}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
