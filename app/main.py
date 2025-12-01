@@ -8,6 +8,7 @@ import logging
 import json
 import shutil
 import os
+import sqlite3
 from pathlib import Path
 from app.logging_config import setup_logging, get_logger
 from app.extractor import GeminiExtractor, ExtractionError
@@ -243,24 +244,46 @@ def get_session(session_id: str):
 def get_session_document(session_id: str, filename: str):
     """Retrieve a specific document from a session"""
     try:
-        session_data = db.get_session(session_id)
-        if not session_data:
-            raise HTTPException(status_code=404, detail="Session not found")
-        
-        # Find the document
-        document = next(
-            (doc for doc in session_data['documents'] if doc['filename'] == filename),
-            None
-        )
-        
-        if not document:
+        # Get the document record from the database
+        conn = sqlite3.connect(db.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT file_data, mime_type
+            FROM documents
+            WHERE session_id = ? AND filename = ?
+        """, (session_id, filename))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
             raise HTTPException(status_code=404, detail="Document not found")
-        
+
+        file_data, mime_type = row
+
+        # Check if file_data is binary content (old format) or file path (new format)
+        if isinstance(file_data, bytes):
+            # Old format: binary content stored directly in the database
+            # Return the binary content directly
+            content = file_data
+        else:
+            # New format: file path stored as string
+            # Construct the full file path and read the content
+            full_path = Path("data/documents") / file_data
+
+            if not full_path.exists():
+                raise HTTPException(status_code=404, detail="Document file not found")
+
+            # Read the file content
+            with open(full_path, 'rb') as f:
+                content = f.read()
+
         # Return the document as a response
         from fastapi.responses import Response
         return Response(
-            content=document['content'],
-            media_type=document['mime_type'] or 'application/octet-stream',
+            content=content,
+            media_type=mime_type or 'application/octet-stream',
             headers={"Content-Disposition": f"inline; filename={filename}"}
         )
     except HTTPException:

@@ -53,6 +53,7 @@ const ResultsView = ({ summary, files, onReset }) => {
         const [y_min, x_min, y_max, x_max] = bbox.coordinates;
 
         // Convert from 1000x1000 normalized space to actual dimensions
+        // Note: The coordinate system may need to be flipped for images depending on how Gemini returns them
         const left = (x_min / 1000) * documentDimensions.width;
         const top = (y_min / 1000) * documentDimensions.height;
         const width = ((x_max - x_min) / 1000) * documentDimensions.width;

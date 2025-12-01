@@ -8,6 +8,7 @@ const PDFViewerWithBoxes = ({ fileUrl, boundingBox, onLoadDimensions }) => {
     const [numPages, setNumPages] = useState(null);
     const [pageNumber, setPageNumber] = useState(1);
     const [pageWidth, setPageWidth] = useState(0);
+    const [pageHeight, setPageHeight] = useState(0);
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
 
@@ -18,6 +19,7 @@ const PDFViewerWithBoxes = ({ fileUrl, boundingBox, onLoadDimensions }) => {
     const onPageLoadSuccess = (page) => {
         const { width, height } = page;
         setPageWidth(width);
+        setPageHeight(height);
 
         if (onLoadDimensions) {
             onLoadDimensions({ width, height });
@@ -26,7 +28,7 @@ const PDFViewerWithBoxes = ({ fileUrl, boundingBox, onLoadDimensions }) => {
 
     // Draw bounding box on canvas overlay
     useEffect(() => {
-        if (!boundingBox || !canvasRef.current || !pageWidth) return;
+        if (!boundingBox || !canvasRef.current || !pageWidth || !pageHeight) return;
 
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
@@ -40,7 +42,6 @@ const PDFViewerWithBoxes = ({ fileUrl, boundingBox, onLoadDimensions }) => {
         const [y_min, x_min, y_max, x_max] = boundingBox.coordinates;
 
         // Convert normalized coordinates (0-1000) to canvas coordinates
-        const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / 1000;
         const scaleY = canvas.height / 1000;
 
@@ -57,7 +58,7 @@ const PDFViewerWithBoxes = ({ fileUrl, boundingBox, onLoadDimensions }) => {
         // Fill with semi-transparent color
         ctx.fillStyle = 'rgba(255, 107, 107, 0.2)';
         ctx.fillRect(x, y, width, height);
-    }, [boundingBox, pageNumber, pageWidth]);
+    }, [boundingBox, pageNumber, pageWidth, pageHeight]);
 
     // Update page number if bounding box changes
     useEffect(() => {
@@ -79,6 +80,7 @@ const PDFViewerWithBoxes = ({ fileUrl, boundingBox, onLoadDimensions }) => {
                     renderTextLayer={true}
                     renderAnnotationLayer={true}
                     width={pageWidth || undefined}
+                    height={pageHeight || undefined}
                 />
             </Document>
 
@@ -86,7 +88,7 @@ const PDFViewerWithBoxes = ({ fileUrl, boundingBox, onLoadDimensions }) => {
             <canvas
                 ref={canvasRef}
                 width={pageWidth || 0}
-                height={pageWidth ? pageWidth * 1.414 : 0} // Approximate A4 ratio
+                height={pageHeight || 0}
                 style={{
                     position: 'absolute',
                     top: 0,

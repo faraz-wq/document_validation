@@ -13,7 +13,11 @@ class SessionDatabase:
         # Ensure data directory exists
         db_dir = Path(db_path).parent
         db_dir.mkdir(parents=True, exist_ok=True)
-        
+
+        # Create directory for storing documents
+        self.documents_dir = Path("data/documents")
+        self.documents_dir.mkdir(parents=True, exist_ok=True)
+
         self.db_path = db_path
         self.init_database()
     
@@ -105,13 +109,26 @@ class SessionDatabase:
             
             # Insert documents
             for file_data in files:
+                # Save document file to disk
+                import os
+                from pathlib import PurePath
+                safe_filename = PurePath(file_data['filename']).name
+                document_path = self.documents_dir / f"{session_id}_{safe_filename}"
+
+                # Write the file content to disk
+                with open(document_path, 'wb') as f:
+                    f.write(file_data['content'])
+
+                # Store the relative file path in the database (relative to the documents directory)
+                relative_path = str(document_path.relative_to(self.documents_dir))
+
                 cursor.execute("""
                     INSERT INTO documents (session_id, filename, file_data, mime_type)
                     VALUES (?, ?, ?, ?)
                 """, (
                     session_id,
                     file_data['filename'],
-                    file_data['content'],
+                    relative_path,  # Store the path to the file instead of binary content
                     file_data.get('mime_type')
                 ))
             
@@ -192,14 +209,28 @@ class SessionDatabase:
                 SELECT filename, file_data, mime_type
                 FROM documents WHERE session_id = ?
             """, (session_id,))
-            
+
             documents = []
             for filename, file_data, mime_type in cursor.fetchall():
-                documents.append({
-                    'filename': filename,
-                    'content': file_data,
-                    'mime_type': mime_type
-                })
+                # Check if file_data is binary content (bytes) or file path (string)
+                # Handle both old format (binary content) and new format (file path)
+                if isinstance(file_data, bytes):
+                    # Old format: binary content was stored directly
+                    # We must NOT return the binary content to avoid the encoding error
+                    # Instead return only metadata and handle document retrieval separately
+                    documents.append({
+                        'filename': filename,
+                        'file_path': None,  # No file path available for old format
+                        'mime_type': mime_type,
+                        'has_binary_content': True  # Flag to indicate binary content exists in DB
+                    })
+                else:
+                    # New format: file path stored as string
+                    documents.append({
+                        'filename': filename,
+                        'file_path': file_data,  # This is the relative path to the file
+                        'mime_type': mime_type
+                    })
             
             # Reconstruct full response
             result = {
@@ -254,17 +285,37 @@ class SessionDatabase:
         """Delete a session and all related data"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        
+
         try:
+            # Get documents to delete their files
+            cursor.execute("SELECT file_data FROM documents WHERE session_id = ?", (session_id,))
+            file_paths = [row[0] for row in cursor.fetchall()]
+
             cursor.execute("DELETE FROM citations WHERE session_id = ?", (session_id,))
             cursor.execute("DELETE FROM bounding_boxes WHERE session_id = ?", (session_id,))
             cursor.execute("DELETE FROM documents WHERE session_id = ?", (session_id,))
             cursor.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
-            
+
+            # Delete the actual document files
+            for file_path in file_paths:
+                # Ensure file_path is a string (decode if it's bytes)
+                if isinstance(file_path, bytes):
+                    file_path_str = file_path.decode('utf-8')
+                else:
+                    file_path_str = str(file_path)
+
+                full_path = self.documents_dir / file_path_str
+                if full_path.exists():
+                    try:
+                        full_path.unlink()  # Delete the file
+                        logger.info(f"Deleted document file: {full_path}")
+                    except Exception as file_error:
+                        logger.error(f"Error deleting document file {full_path}: {file_error}")
+
             conn.commit()
             logger.info(f"Deleted session {session_id}")
             return True
-            
+
         except Exception as e:
             conn.rollback()
             logger.error(f"Error deleting session {session_id}: {e}", exc_info=True)
