@@ -1,83 +1,75 @@
 import React from 'react';
 import './ResultsView.css';
-import PDFViewerWithBoxes from './PDFViewerWithBoxes';
+import { Document, Page, pdfjs } from 'react-pdf';
+
+// Set up the worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 const ResultsView = ({ summary, files, onReset }) => {
     const [selectedFileIndex, setSelectedFileIndex] = React.useState(0);
-    const [hoveredField, setHoveredField] = React.useState(null);
-    const [documentDimensions, setDocumentDimensions] = React.useState({ width: 0, height: 0 });
-    const previewRef = React.useRef(null);
+    const [numPages, setNumPages] = React.useState(null);
+    const [pageNumber, setPageNumber] = React.useState(1);
 
+    // Check if we have annotated files from the backend
+    const annotatedFiles = summary?.annotated_files || [];
+    const hasAnnotatedFiles = annotatedFiles.length > 0;
+
+    // Use annotated file if available, otherwise use original
     const currentFile = files && files.length > 0 ? files[selectedFileIndex] : null;
-    const isPdf = currentFile?.type === 'application/pdf';
+    const currentAnnotatedFile = hasAnnotatedFiles ? annotatedFiles[selectedFileIndex] : null;
 
-    // Memoize blob URL creation to prevent recreating on every render
+    // Determine if we should show the annotated version
+    const useAnnotated = hasAnnotatedFiles && currentAnnotatedFile;
+
+    // Create file URL - use annotated if available
     const fileUrl = React.useMemo(() => {
-        if (!currentFile) return null;
-        return URL.createObjectURL(currentFile);
-    }, [currentFile]);
+        if (useAnnotated) {
+            // Use the annotated file URL from the backend
+            return currentAnnotatedFile.annotated_url;
+        } else if (currentFile) {
+            // Fallback to original file
+            return URL.createObjectURL(currentFile);
+        }
+        return null;
+    }, [currentFile, currentAnnotatedFile, useAnnotated]);
 
-    // Cleanup blob URL when component unmounts or file changes
+    // Cleanup blob URL when component unmounts or file changes (only for blob URLs)
     React.useEffect(() => {
         return () => {
-            if (fileUrl) {
+            if (fileUrl && fileUrl.startsWith('blob:')) {
                 URL.revokeObjectURL(fileUrl);
             }
         };
     }, [fileUrl]);
 
-    // Get bounding box for the currently hovered field
-    const activeBoundingBox = hoveredField && summary?.bounding_boxes?.[hoveredField];
+    // Determine file type
+    const isPdf = currentFile?.type === 'application/pdf' || useAnnotated; // Annotated files are always PDFs
 
-    // Handle image/iframe load to get dimensions
-    const handlePreviewLoad = (e) => {
-        if (isPdf && e.target.tagName === 'IFRAME') {
-            // For PDFs, use the iframe dimensions
-            setDocumentDimensions({
-                width: e.target.offsetWidth,
-                height: e.target.offsetHeight
-            });
-        } else if (e.target.tagName === 'IMG') {
-            // For images, use natural dimensions
-            setDocumentDimensions({
-                width: e.target.naturalWidth,
-                height: e.target.naturalHeight
-            });
+    const onDocumentLoadSuccess = ({ numPages }) => {
+        setNumPages(numPages);
+    };
+
+    // Configure PDF loading options
+    const pdfOptions = React.useMemo(() => {
+        if (useAnnotated && fileUrl && !fileUrl.startsWith('blob:')) {
+            // For server URLs, configure proper loading
+            return {
+                url: fileUrl,
+                httpHeaders: {
+                    'Accept': 'application/pdf',
+                },
+                withCredentials: false,
+            };
         }
-    };
-
-    // Convert normalized coordinates (0-1000) to actual pixel coordinates
-    const getBoundingBoxStyle = (bbox) => {
-        if (!bbox || !documentDimensions.width || !documentDimensions.height) return null;
-
-        const [y_min, x_min, y_max, x_max] = bbox.coordinates;
-
-        // Convert from 1000x1000 normalized space to actual dimensions
-        // Note: The coordinate system may need to be flipped for images depending on how Gemini returns them
-        const left = (x_min / 1000) * documentDimensions.width;
-        const top = (y_min / 1000) * documentDimensions.height;
-        const width = ((x_max - x_min) / 1000) * documentDimensions.width;
-        const height = ((y_max - y_min) / 1000) * documentDimensions.height;
-
-        return {
-            position: 'absolute',
-            left: `${left}px`,
-            top: `${top}px`,
-            width: `${width}px`,
-            height: `${height}px`,
-            border: '2px solid #ff6b6b',
-            backgroundColor: 'rgba(255, 107, 107, 0.2)',
-            pointerEvents: 'none',
-            zIndex: 10,
-            transition: 'all 0.2s ease'
-        };
-    };
+        // For blob URLs, just return the URL
+        return fileUrl;
+    }, [fileUrl, useAnnotated]);
 
     const flattenObject = (obj, prefix = '', rawPrefix = '') => {
         let items = [];
 
         for (const [key, value] of Object.entries(obj)) {
-            if (key === 'source_documents' || key === '_token_usage' || key === 'citations') continue;
+            if (key === 'source_documents' || key === '_token_usage' || key === 'citations' || key === 'bounding_boxes' || key === 'annotated_files') continue;
 
             const label = prefix ? `${prefix} ${key.replace(/_/g, ' ')} ` : key.replace(/_/g, ' ');
             const rawKey = rawPrefix ? `${rawPrefix}.${key} ` : key;
@@ -140,12 +132,15 @@ const ResultsView = ({ summary, files, onReset }) => {
             <div className="split-view">
                 <div className="preview-panel">
                     <div className="panel-header">
-                        Document Preview
+                        Document Preview {useAnnotated && <span style={{ color: '#4CAF50', fontSize: '0.9em' }}>(Annotated)</span>}
                         {files && files.length > 1 && (
                             <div className="file-selector">
                                 <select
                                     value={selectedFileIndex}
-                                    onChange={(e) => setSelectedFileIndex(Number(e.target.value))}
+                                    onChange={(e) => {
+                                        setSelectedFileIndex(Number(e.target.value));
+                                        setPageNumber(1); // Reset to first page when changing files
+                                    }}
                                     className="file-select"
                                 >
                                     {files.map((f, idx) => (
@@ -157,25 +152,79 @@ const ResultsView = ({ summary, files, onReset }) => {
                             </div>
                         )}
                     </div>
-                    <div className="preview-content" ref={previewRef}>
+                    <div className="preview-content">
                         {fileUrl && (
                             isPdf ? (
-                                <PDFViewerWithBoxes
-                                    fileUrl={fileUrl}
-                                    boundingBox={activeBoundingBox && activeBoundingBox.filename === currentFile?.name ? activeBoundingBox : null}
-                                    onLoadDimensions={setDocumentDimensions}
-                                />
+                                <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                                    <Document
+                                        file={pdfOptions}
+                                        onLoadSuccess={onDocumentLoadSuccess}
+                                        loading={<div>Loading PDF...</div>}
+                                    >
+                                        <Page
+                                            pageNumber={pageNumber}
+                                            renderTextLayer={true}
+                                            renderAnnotationLayer={true}
+                                            width={800}
+                                        />
+                                    </Document>
+
+                                    {/* Page navigation */}
+                                    {numPages && numPages > 1 && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            bottom: '10px',
+                                            left: '50%',
+                                            transform: 'translateX(-50%)',
+                                            background: 'rgba(0, 0, 0, 0.7)',
+                                            color: 'white',
+                                            padding: '8px 16px',
+                                            borderRadius: '4px',
+                                            display: 'flex',
+                                            gap: '10px',
+                                            alignItems: 'center'
+                                        }}>
+                                            <button
+                                                onClick={() => setPageNumber(prev => Math.max(1, prev - 1))}
+                                                disabled={pageNumber <= 1}
+                                                style={{
+                                                    background: 'transparent',
+                                                    border: '1px solid white',
+                                                    color: 'white',
+                                                    padding: '4px 8px',
+                                                    cursor: pageNumber <= 1 ? 'not-allowed' : 'pointer',
+                                                    opacity: pageNumber <= 1 ? 0.5 : 1
+                                                }}
+                                            >
+                                                ←
+                                            </button>
+                                            <span>
+                                                Page {pageNumber} of {numPages}
+                                            </span>
+                                            <button
+                                                onClick={() => setPageNumber(prev => Math.min(numPages, prev + 1))}
+                                                disabled={pageNumber >= numPages}
+                                                style={{
+                                                    background: 'transparent',
+                                                    border: '1px solid white',
+                                                    color: 'white',
+                                                    padding: '4px 8px',
+                                                    cursor: pageNumber >= numPages ? 'not-allowed' : 'pointer',
+                                                    opacity: pageNumber >= numPages ? 0.5 : 1
+                                                }}
+                                            >
+                                                →
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             ) : (
-                                <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <img
                                         src={fileUrl}
                                         alt="Document Preview"
                                         className="preview-image"
-                                        onLoad={handlePreviewLoad}
                                     />
-                                    {activeBoundingBox && activeBoundingBox.filename === currentFile?.name && (
-                                        <div style={getBoundingBoxStyle(activeBoundingBox)} className="bounding-box-highlight" />
-                                    )}
                                 </div>
                             )
                         )}
@@ -189,12 +238,7 @@ const ResultsView = ({ summary, files, onReset }) => {
                             <table className="summary-table">
                                 <tbody>
                                     {leftColumn.map((item, idx) => (
-                                        <tr
-                                            key={idx}
-                                            onMouseEnter={() => setHoveredField(item.rawKey)}
-                                            onMouseLeave={() => setHoveredField(null)}
-                                            className={hoveredField === item.rawKey ? 'highlighted-row' : ''}
-                                        >
+                                        <tr key={idx}>
                                             <td className="key-cell">{item.key}</td>
                                             <td className="value-cell">
                                                 {item.value}
@@ -212,12 +256,7 @@ const ResultsView = ({ summary, files, onReset }) => {
                             <table className="summary-table">
                                 <tbody>
                                     {rightColumn.map((item, idx) => (
-                                        <tr
-                                            key={idx}
-                                            onMouseEnter={() => setHoveredField(item.rawKey)}
-                                            onMouseLeave={() => setHoveredField(null)}
-                                            className={hoveredField === item.rawKey ? 'highlighted-row' : ''}
-                                        >
+                                        <tr key={idx}>
                                             <td className="key-cell">{item.key}</td>
                                             <td className="value-cell">
                                                 {item.value}

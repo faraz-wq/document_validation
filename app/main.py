@@ -13,6 +13,7 @@ from pathlib import Path
 from app.logging_config import setup_logging, get_logger
 from app.extractor import GeminiExtractor, ExtractionError
 from app.database import db
+from app.pdf_annotator import annotate_document
 from app.models import (
     IntegratedCertificateSummary,
     IncomeCertificateSummary,
@@ -95,6 +96,64 @@ async def extract_summary(
 
         logger.info(f"Results stored in: {output_file_path}")
         
+        # Annotate documents with bounding boxes
+        annotated_files = []
+        if result.get('bounding_boxes'):
+            logger.info("Annotating documents with bounding boxes")
+            
+            # Create directories for uploaded and annotated files
+            uploads_dir = Path(parent_dir) / "static" / "uploads"
+            annotated_dir = Path(parent_dir) / "static" / "annotated"
+            uploads_dir.mkdir(parents=True, exist_ok=True)
+            annotated_dir.mkdir(parents=True, exist_ok=True)
+            
+            for file_data in file_data_list:
+                filename = file_data['filename']
+                content = file_data['content']
+                
+                # Save the original file temporarily
+                file_path = uploads_dir / filename
+                with open(file_path, 'wb') as f:
+                    f.write(content)
+                
+                # Filter bounding boxes for this specific file
+                file_bounding_boxes = {
+                    field_name: bbox_data
+                    for field_name, bbox_data in result['bounding_boxes'].items()
+                    if bbox_data.get('filename') == filename
+                }
+                
+                # Only annotate if there are bounding boxes for this file
+                if file_bounding_boxes:
+                    try:
+                        annotated_path = annotate_document(
+                            file_path=file_path,
+                            bounding_boxes=file_bounding_boxes,
+                            output_dir=annotated_dir,
+                            filename_suffix="_annotated"
+                        )
+                        
+                        # Create URL for the annotated file
+                        annotated_filename = annotated_path.name
+                        annotated_url = f"/static/annotated/{annotated_filename}"
+                        annotated_files.append({
+                            'original_filename': filename,
+                            'annotated_filename': annotated_filename,
+                            'annotated_url': annotated_url
+                        })
+                        
+                        logger.info(f"Annotated file saved: {annotated_filename} with {len(file_bounding_boxes)} boxes")
+                        
+                    except Exception as annot_error:
+                        logger.error(f"Failed to annotate {filename}: {annot_error}", exc_info=True)
+                        # Continue processing even if annotation fails
+                else:
+                    logger.info(f"No bounding boxes found for {filename}, skipping annotation")
+        
+        # Add annotated file URLs to the result
+        if annotated_files:
+            result['annotated_files'] = annotated_files
+        
         # Store in database
         try:
             session_id = db.create_session(
@@ -166,9 +225,46 @@ async def submit_document(
         logger.info("Starting extraction...")
         result = extractor.extract(application_type, file_data_list)
         
+        # Annotate the PDF with bounding boxes if available
+        annotated_file_url = None
+        if result.get('bounding_boxes'):
+            logger.info("Annotating document with bounding boxes")
+            
+            # Create annotated directory
+            annotated_dir = Path(parent_dir) / "static" / "annotated"
+            annotated_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Filter bounding boxes for this specific file
+            file_bounding_boxes = {
+                field_name: bbox_data
+                for field_name, bbox_data in result['bounding_boxes'].items()
+                if bbox_data.get('filename') == filename
+            }
+            
+            if file_bounding_boxes:
+                try:
+                    annotated_path = annotate_document(
+                        file_path=file_path,
+                        bounding_boxes=file_bounding_boxes,
+                        output_dir=annotated_dir,
+                        filename_suffix="_annotated"
+                    )
+                    
+                    # Use annotated file URL instead of original
+                    annotated_filename = annotated_path.name
+                    annotated_file_url = f"/static/annotated/{annotated_filename}"
+                    logger.info(f"Annotated file saved: {annotated_filename} with {len(file_bounding_boxes)} boxes")
+                    
+                except Exception as annot_error:
+                    logger.error(f"Failed to annotate {filename}: {annot_error}", exc_info=True)
+                    # Fall back to original file if annotation fails
+            else:
+                logger.info(f"No bounding boxes found for {filename}, using original file")
+        
         # Determine file type for the template
         file_type = "pdf" if file.content_type == "application/pdf" else "image"
-        file_url = f"/view-document/{filename}"
+        # Use annotated file if available, otherwise use original
+        file_url = annotated_file_url if annotated_file_url else f"/view-document/{filename}"
         
         return templates.TemplateResponse(
             "results.html", 
