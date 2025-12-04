@@ -7,6 +7,8 @@ from vertexai.generative_models import GenerativeModel, Part, FinishReason
 from pydantic import BaseModel
 import app.models as schemas
 from app.logging_config import get_logger
+from app.core.schema_registry import schema_registry
+from app.core.dynamic_model_generator import DynamicModelGenerator
 
 logger = get_logger(__name__)
 

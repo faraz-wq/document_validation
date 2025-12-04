@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Depends
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -21,6 +21,9 @@ from app.models import (
     EWSCertificateSummary,
     FamilyMemberCertificateSummary
 )
+from app.schemas.schema_models import SchemaDefinition
+from app.core.configurable_extractor import ConfigurableExtractor
+from app.utils.auth import get_user_from_api_key
 
 # Setup for UI
 app = FastAPI(title="Document Validation Service")
@@ -401,6 +404,221 @@ def delete_session(session_id: str):
     except Exception as e:
         logger.error(f"Error deleting session {session_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+# New v1 endpoints for configurable schemas
+@app.post("/v1/schemas")
+async def create_schema(
+    schema_def: SchemaDefinition,
+    api_key: str = Depends(get_user_from_api_key)
+):
+    """Create a new custom schema definition"""
+    from app.core.schema_registry import schema_registry
+
+    # Set current user from API key validation
+    schema_def.created_by = api_key["user_id"]
+
+    success = schema_registry.register_schema(schema_def)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to register schema - ID may already exist")
+
+    return {"message": "Schema created successfully", "schema_id": schema_def.schema_id}
+
+
+@app.get("/v1/schemas/{schema_id}")
+async def get_schema(
+    schema_id: str,
+    api_key: str = Depends(get_user_from_api_key)
+):
+    """Get a specific schema definition"""
+    from app.core.schema_registry import schema_registry
+
+    user_id = api_key["user_id"]
+    schema = schema_registry.get_schema(schema_id, user_id)
+    if not schema:
+        raise HTTPException(status_code=404, detail="Schema not found or access denied")
+
+    return schema
+
+
+@app.get("/v1/schemas")
+async def list_schemas(
+    api_key: str = Depends(get_user_from_api_key)
+):
+    """List all schemas accessible to the user"""
+    from app.core.schema_registry import schema_registry
+
+    user_id = api_key["user_id"]
+    schemas = schema_registry.list_user_schemas(user_id)
+    return {"schemas": schemas}
+
+
+@app.put("/v1/schemas/{schema_id}")
+async def update_schema(
+    schema_id: str,
+    updates: dict,
+    api_key: str = Depends(get_user_from_api_key)
+):
+    """Update an existing schema definition"""
+    from app.core.schema_registry import schema_registry
+
+    user_id = api_key["user_id"]
+    success = schema_registry.update_schema(schema_id, user_id, updates)
+    if not success:
+        raise HTTPException(status_code=403, detail="Access denied or schema not found")
+
+    return {"message": "Schema updated successfully"}
+
+
+@app.delete("/v1/schemas/{schema_id}")
+async def delete_schema(
+    schema_id: str,
+    api_key: str = Depends(get_user_from_api_key)
+):
+    """Delete a schema definition"""
+    from app.core.schema_registry import schema_registry
+
+    user_id = api_key["user_id"]
+    success = schema_registry.delete_schema(schema_id, user_id)
+    if not success:
+        raise HTTPException(status_code=403, detail="Access denied or schema not found")
+
+    return {"message": "Schema deleted successfully"}
+
+
+@app.post("/v1/extract-custom")
+async def extract_summary_custom(
+    schema_id: Annotated[str, Form(..., description="ID of the custom schema to use")],
+    files: List[UploadFile] = File(..., description="List of document files"),
+    api_key: str = Depends(get_user_from_api_key)
+):
+    """
+    Extracts structured summary from uploaded documents using a custom schema.
+    """
+    from app.core.schema_registry import schema_registry
+
+    user_id = api_key["user_id"]
+
+    # Validate that user has access to this schema
+    schema_def = schema_registry.get_schema(schema_id, user_id)
+    if not schema_def:
+        raise HTTPException(status_code=403, detail="Access denied to this schema")
+
+    # Read files into memory (be mindful of large files in production)
+    file_data_list = []
+    for file in files:
+        logger.debug(f"Reading file content for: {file.filename}")
+        content = await file.read()
+        logger.info(f"Successfully read file: {file.filename}, size: {len(content)} bytes")
+
+        file_data_list.append({
+            "filename": file.filename,
+            "content": content,
+            "mime_type": file.content_type
+        })
+
+    try:
+        # Use the custom schema for extraction
+        application_type = f"custom:{schema_id}"  # Special prefix for custom schemas
+        from app.core.configurable_extractor import ConfigurableExtractor
+        extractor = ConfigurableExtractor(user_id=user_id)
+        result = extractor.extract(application_type, file_data_list)
+
+        # Store the result in a file (for backward compatibility)
+        output_dir = Path("extracted_results")
+        output_dir.mkdir(exist_ok=True)
+
+        # Create a unique filename based on application type and first file name
+        first_filename = Path(file_data_list[0]["filename"]).stem
+        output_filename = f"custom_{schema_id}_{first_filename}_{len(file_data_list)}files.json"
+        output_file_path = output_dir / output_filename
+
+        with open(output_file_path, 'w', encoding='utf-8') as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
+
+        logger.info(f"Results stored in: {output_file_path}")
+
+        # Annotate documents with bounding boxes
+        annotated_files = []
+        if result.get('bounding_boxes'):
+            logger.info("Annotating documents with bounding boxes")
+
+            # Create directories for uploaded and annotated files
+            current_dir = os.path.dirname(__file__)
+            parent_dir = os.path.dirname(current_dir)
+            uploads_dir = Path(parent_dir) / "static" / "uploads"
+            annotated_dir = Path(parent_dir) / "static" / "annotated"
+            uploads_dir.mkdir(parents=True, exist_ok=True)
+            annotated_dir.mkdir(parents=True, exist_ok=True)
+
+            for file_data in file_data_list:
+                filename = file_data['filename']
+                content = file_data['content']
+
+                # Save the original file temporarily
+                file_path = uploads_dir / filename
+                with open(file_path, 'wb') as f:
+                    f.write(content)
+
+                # Filter bounding boxes for this specific file
+                file_bounding_boxes = {
+                    field_name: bbox_data
+                    for field_name, bbox_data in result['bounding_boxes'].items()
+                    if bbox_data.get('filename') == filename
+                }
+
+                # Only annotate if there are bounding boxes for this file
+                if file_bounding_boxes:
+                    try:
+                        from app.pdf_annotator import annotate_document
+                        annotated_path = annotate_document(
+                            file_path=file_path,
+                            bounding_boxes=file_bounding_boxes,
+                            output_dir=annotated_dir,
+                            filename_suffix="_annotated"
+                        )
+
+                        # Create URL for the annotated file
+                        annotated_filename = annotated_path.name
+                        annotated_url = f"/static/annotated/{annotated_filename}"
+                        annotated_files.append({
+                            'original_filename': filename,
+                            'annotated_filename': annotated_filename,
+                            'annotated_url': annotated_url
+                        })
+
+                        logger.info(f"Annotated file saved: {annotated_filename} with {len(file_bounding_boxes)} boxes")
+
+                    except Exception as annot_error:
+                        logger.error(f"Failed to annotate {filename}: {annot_error}", exc_info=True)
+                        # Continue processing even if annotation fails
+                else:
+                    logger.info(f"No bounding boxes found for {filename}, skipping annotation")
+
+        # Add annotated file URLs to the result
+        if annotated_files:
+            result['annotated_files'] = annotated_files
+
+        # Store in database
+        try:
+            session_id = db.create_session(
+                application_type=f"custom:{schema_id}",
+                summary=result.copy(),  # Make a copy since create_session modifies it
+                files=file_data_list
+            )
+            result['session_id'] = session_id
+            logger.info(f"Session created with ID: {session_id}")
+        except Exception as db_error:
+            logger.error(f"Failed to store session in database: {db_error}", exc_info=True)
+            # Continue even if database storage fails
+
+        return result
+    except ExtractionError as e:
+        logger.error(f"ExtractionError in extract_summary_custom: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error in extract_summary_custom: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
 
 @app.on_event("startup")
 async def startup_event():

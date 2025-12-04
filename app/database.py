@@ -9,13 +9,13 @@ from app.logging_config import get_logger
 logger = get_logger(__name__)
 
 class SessionDatabase:
-    def __init__(self, db_path: str = "data/sessions.db"):
+    def __init__(self, db_path: str = "sessions_v1.db"):
         # Ensure data directory exists
         db_dir = Path(db_path).parent
         db_dir.mkdir(parents=True, exist_ok=True)
 
         # Create directory for storing documents
-        self.documents_dir = Path("data/documents")
+        self.documents_dir = Path("documents_v1")
         self.documents_dir.mkdir(parents=True, exist_ok=True)
 
         self.db_path = db_path
