@@ -1,3 +1,3 @@
 """
-Document Validation Service - Core Package
+Core package initialization
 """

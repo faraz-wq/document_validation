@@ -1,3 +1,3 @@
 """
-Document Validation Service - Utils Package
+Utilities package initialization
 """

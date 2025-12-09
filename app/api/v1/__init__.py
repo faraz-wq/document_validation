@@ -1,3 +1,5 @@
 """
-Document Validation Service - API V1 Package
+API v1 package initialization
 """
+
+from . import auth

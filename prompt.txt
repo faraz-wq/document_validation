@@ -1,0 +1,190 @@
+Global Constraints (apply to all phases)
+
+Do not modify behavior or signatures of non-versioned endpoints, e.g.:
+
+/extract-summary, /submit, /sessions, /sessions/{session_id}, /sessions/{session_id}/document/{filename}, /api-keys, /register, /health, /view-document/{filename}, /admin/dashboard, /schemas/manage, etc.
+Treat these as legacy v0 and read-only.
+
+All new features must be implemented only in v1 routers / services under app/api/v1/... (or equivalent v1 namespace) and shared internal services (app/services, app/utils, etc.), without breaking existing v0 behavior.
+
+Internal refactors are allowed only if:
+
+They are backward-compatible for existing base endpoints.
+
+They do not change the public contract of non-v1 routes.
+
+Prefer composition over modifying existing v0 functions: create new wrappers or v1-specific service functions when in doubt.
+
+Phase 1 – JWT Auth Layer for Web Users (/v1/auth/*)
+
+Goal: Introduce a JWT-based authentication system for web dashboard users, without touching any existing API-key auth or legacy endpoints.
+
+Tasks:
+
+Dependencies & config
+
+Add JWT config in a dedicated module, e.g. app/core/security.py:
+
+SECRET_KEY, ALGORITHM = "HS256", ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS.
+
+Add password hashing utilities using bcrypt in app/utils/passwords.py:
+
+hash_password(plain: str) -> str
+
+verify_password(plain: str, hashed: str) -> bool
+
+Ensure the existing User ORM model supports hashed_password (string) and is_active (bool).
+
+Token creation utilities
+
+In app/core/security.py, implement:
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str: ...
+def create_refresh_token(data: dict, expires_delta: timedelta | None = None) -> str: ...
+
+
+Tokens should include:
+
+sub (user_id as string)
+
+type = "access" or "refresh"
+
+Optional email, is_admin.
+
+JWT user dependency (v1-only)
+
+In app/api/v1/deps.py (or similar), implement:
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/login")  # v1-only
+
+def get_current_user_from_jwt(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    db: Session = Depends(get_db),
+) -> User:
+    # decode JWT with SECRET_KEY, validate, fetch user by id (sub), ensure is_active
+
+
+Do not alter existing get_user_from_api_key() or admin auth dependencies; they remain for v0 and /v1/admin/*.
+
+New v1 auth router
+
+Create app/api/v1/auth.py with FastAPI router, prefix /v1/auth.
+
+Endpoint: POST /v1/auth/register
+
+Request body model:
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    username: constr(min_length=3, max_length=50)
+    password: constr(min_length=8)
+
+
+Steps:
+
+Ensure User with same email/username does not already exist.
+
+Create new User:
+
+hashed_password = hash_password(password)
+
+is_admin = False
+
+is_active = True
+
+Persist in DB.
+
+Optionally call existing create_api_key(db, user.id, description="default") without modifying that function’s behavior.
+
+Response model RegisterResponse:
+
+class UserOut(BaseModel):
+    id: int
+    email: EmailStr
+    username: str
+    is_admin: bool
+
+class RegisterResponse(BaseModel):
+    user: UserOut
+    api_key: str | None = None  # only if created
+
+
+This endpoint is v1-only; do not touch any existing /register.
+
+Endpoint: POST /v1/auth/login
+
+Request body:
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+Steps:
+
+Fetch User by email.
+
+Verify password using verify_password.
+
+If invalid / inactive → 401.
+
+Create access & refresh tokens:
+
+access_token = create_access_token({"sub": str(user.id), "email": user.email, "is_admin": user.is_admin})
+refresh_token = create_refresh_token({"sub": str(user.id), "type": "refresh"})
+
+
+Response:
+
+class LoginResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: Literal["bearer"]
+    user: UserOut
+
+
+Endpoint: POST /v1/auth/refresh
+
+Request body:
+
+class TokenRefreshRequest(BaseModel):
+    refresh_token: str
+
+
+Steps:
+
+Decode refresh_token, ensure type == "refresh", not expired.
+
+Fetch user, ensure active.
+
+Issue new access token only.
+
+Response:
+
+class TokenRefreshResponse(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"]
+
+
+Endpoint: POST /v1/auth/logout
+
+For now, stateless:
+
+Optionally accept refresh_token and perform soft invalidation if you implement a token blacklist in future.
+
+Return 200 with { "message": "ok" }.
+
+No changes to existing v0 auth/session behavior.
+
+Wire router in v1 only
+
+In app/main.py or central router registration:
+
+Mount new router:
+
+from app.api.v1 import auth as v1_auth
+
+app.include_router(v1_auth.router, prefix="", tags=["v1-auth"])
+
+
+Ensure that no existing non-v1 routes are modified or removed.

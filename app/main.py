@@ -405,6 +405,11 @@ def delete_session(session_id: str):
         logger.error(f"Error deleting session {session_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+# Include v1 auth routes
+from app.api.v1 import auth as v1_auth
+
+app.include_router(v1_auth.router, prefix="", tags=["v1-auth"])
+
 # New v1 endpoints for configurable schemas
 @app.post("/v1/schemas")
 async def create_schema(
