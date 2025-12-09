@@ -408,9 +408,11 @@ def delete_session(session_id: str):
 # Include v1 auth routes
 from app.api.v1 import auth as v1_auth
 from app.api.v1 import sessions as v1_sessions
+from app.api.v1 import me_api_keys as v1_me_api_keys
 
 app.include_router(v1_auth.router, prefix="", tags=["v1-auth"])
 app.include_router(v1_sessions.router, prefix="/v1", tags=["v1-sessions"])
+app.include_router(v1_me_api_keys.router, prefix="/v1", tags=["v1-me-api-keys"])
 
 # New v1 endpoints for configurable schemas
 @app.post("/v1/schemas")
