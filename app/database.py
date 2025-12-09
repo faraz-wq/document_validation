@@ -14,8 +14,8 @@ class SessionDatabase:
         db_dir = Path(db_path).parent
         db_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create directory for storing documents
-        self.documents_dir = Path("documents_v1")
+        # Create directory for storing documents in the same directory as the database file
+        self.documents_dir = Path(db_path).parent / "documents_v1"
         self.documents_dir.mkdir(parents=True, exist_ok=True)
 
         self.db_path = db_path
@@ -33,7 +33,9 @@ class SessionDatabase:
                 application_type TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 summary_json TEXT NOT NULL,
-                token_usage_json TEXT
+                token_usage_json TEXT,
+                user_id INTEGER,
+                api_key_id INTEGER
             )
         """)
         
@@ -82,7 +84,10 @@ class SessionDatabase:
         application_type: str,
         summary: Dict[str, Any],
         files: List[Dict[str, Any]],
-        token_usage: Optional[Dict[str, int]] = None
+        token_usage: Optional[Dict[str, int]] = None,
+        *,
+        user_id: int | None = None,
+        api_key_id: int | None = None
     ) -> str:
         """Create a new session and store all related data"""
         session_id = str(uuid.uuid4())
@@ -98,13 +103,15 @@ class SessionDatabase:
             
             # Insert session
             cursor.execute("""
-                INSERT INTO sessions (session_id, application_type, summary_json, token_usage_json)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO sessions (session_id, application_type, summary_json, token_usage_json, user_id, api_key_id)
+                VALUES (?, ?, ?, ?, ?, ?)
             """, (
                 session_id,
                 application_type,
                 json.dumps(summary),
-                json.dumps(token_usage_data) if token_usage_data else None
+                json.dumps(token_usage_data) if token_usage_data else None,
+                user_id,
+                api_key_id
             ))
             
             # Insert documents

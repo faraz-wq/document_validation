@@ -407,8 +407,10 @@ def delete_session(session_id: str):
 
 # Include v1 auth routes
 from app.api.v1 import auth as v1_auth
+from app.api.v1 import sessions as v1_sessions
 
 app.include_router(v1_auth.router, prefix="", tags=["v1-auth"])
+app.include_router(v1_sessions.router, prefix="/v1", tags=["v1-sessions"])
 
 # New v1 endpoints for configurable schemas
 @app.post("/v1/schemas")
@@ -492,6 +494,7 @@ async def delete_schema(
 
 @app.post("/v1/extract-custom")
 async def extract_summary_custom(
+    request: Request,
     schema_id: Annotated[str, Form(..., description="ID of the custom schema to use")],
     files: List[UploadFile] = File(..., description="List of document files"),
     api_key: str = Depends(get_user_from_api_key)
@@ -501,7 +504,8 @@ async def extract_summary_custom(
     """
     from app.core.schema_registry import schema_registry
 
-    user_id = api_key["user_id"]
+    user_id = api_key.id  # api_key here refers to the User object returned by get_user_from_api_key dependency
+    api_key_id = request.state.api_key_id  # Get the API key ID from request state
 
     # Validate that user has access to this schema
     schema_def = schema_registry.get_schema(schema_id, user_id)
@@ -608,7 +612,9 @@ async def extract_summary_custom(
             session_id = db.create_session(
                 application_type=f"custom:{schema_id}",
                 summary=result.copy(),  # Make a copy since create_session modifies it
-                files=file_data_list
+                files=file_data_list,
+                user_id=user_id,
+                api_key_id=api_key_id
             )
             result['session_id'] = session_id
             logger.info(f"Session created with ID: {session_id}")

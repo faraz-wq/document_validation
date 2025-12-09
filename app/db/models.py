@@ -53,6 +53,7 @@ class ApiKey(Base):
 
     # Relationships
     owner = relationship("User", back_populates="api_keys")
+    sessions = relationship("Session", back_populates="api_key", cascade="all, delete-orphan")
     request_logs = relationship("RequestLog", back_populates="api_key", cascade="all, delete-orphan")
 
 
@@ -115,7 +116,8 @@ class Session(Base):
     __tablename__ = "sessions"
 
     session_id = Column(String(36), primary_key=True)  # UUID
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    api_key_id = Column(Integer, ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=True, index=True)
     application_type = Column(String(100), nullable=False)
     summary_json = Column(JSON, nullable=False)
     token_usage_json = Column(JSON, nullable=True)
@@ -123,6 +125,7 @@ class Session(Base):
 
     # Relationships
     user = relationship("User", back_populates="sessions")
+    api_key = relationship("ApiKey", back_populates="sessions")
     documents = relationship("Document", back_populates="session", cascade="all, delete-orphan")
     bounding_boxes = relationship("BoundingBox", back_populates="session", cascade="all, delete-orphan")
     citations = relationship("Citation", back_populates="session", cascade="all, delete-orphan")
