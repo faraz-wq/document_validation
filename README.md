@@ -102,7 +102,9 @@ The React app will be available at `http://localhost:3000`.
 
 ## API Usage
 
-### Endpoint: `POST /extract-summary`
+### V0 Endpoints (Legacy)
+
+#### Endpoint: `POST /extract-summary`
 
 **Parameters:**
 - `application_type` (string): One of:
@@ -122,6 +124,117 @@ curl -X 'POST' \
   -H 'Content-Type: multipart/form-data' \
   -F 'application_type=Income Certificate' \
   -F 'files=@/path/to/document.pdf'
+```
+
+### V1 Endpoints (New User-Specific Features)
+
+The v1 endpoints provide enhanced functionality with proper user authentication and ownership controls. All v1 endpoints require JWT authentication.
+
+#### Authentication Setup
+
+First, register/login to get a JWT token:
+
+```bash
+# Register new user
+curl -X 'POST' \
+  'http://localhost:8000/v1/register' \
+  -H 'Content-Type: application/json' \
+  -d '{"email": "user@example.com", "username": "username", "password": "password"}'
+
+# Or login with existing credentials
+curl -X 'POST' \
+  'http://localhost:8000/v1/login' \
+  -H 'Content-Type: application/json' \
+  -d '{"username": "username", "password": "password"}'
+```
+
+The response will include a JWT token for authentication.
+
+#### V1 Session Management
+
+##### List User Sessions
+`GET /v1/me/sessions/`
+
+**Headers:**
+- `Authorization: Bearer {jwt_token}`
+
+**Query Parameters:**
+- `limit` (optional, integer, default: 50, min: 1, max: 100)
+- `offset` (optional, integer, default: 0, min: 0)
+
+**Example:**
+```bash
+curl -X 'GET' \
+  'http://localhost:8000/v1/me/sessions/?limit=25' \
+  -H 'Authorization: Bearer {jwt_token}'
+```
+
+##### Get Specific Session
+`GET /v1/me/sessions/{session_id}`
+
+**Headers:**
+- `Authorization: Bearer {jwt_token}`
+- `session_id`: Unique identifier of the session
+
+**Example:**
+```bash
+curl -X 'GET' \
+  'http://localhost:8000/v1/me/sessions/uuid-here' \
+  -H 'Authorization: Bearer {jwt_token}'
+```
+
+#### V1 API Key Management
+
+##### List User API Keys
+`GET /v1/me/api-keys/`
+
+**Headers:**
+- `Authorization: Bearer {jwt_token}`
+
+**Example:**
+```bash
+curl -X 'GET' \
+  'http://localhost:8000/v1/me/api-keys/' \
+  -H 'Authorization: Bearer {jwt_token}'
+```
+
+##### Create User API Key
+`POST /v1/me/api-keys/`
+
+**Headers:**
+- `Authorization: Bearer {jwt_token}`
+- `Content-Type: application/json`
+
+**Request Body:**
+```json
+{
+  "description": "string"  // optional description
+}
+```
+
+**Example:**
+```bash
+curl -X 'POST' \
+  'http://localhost:8000/v1/me/api-keys/' \
+  -H 'Authorization: Bearer {jwt_token}' \
+  -H 'Content-Type: application/json' \
+  -d '{"description": "My production API key"}'
+```
+
+> **Note:** API key is returned in plaintext only once. Store it securely.
+
+##### Revoke User API Key
+`DELETE /v1/me/api-keys/{key_id}`
+
+**Headers:**
+- `Authorization: Bearer {jwt_token}`
+- `key_id`: Integer ID of the API key to revoke
+
+**Example:**
+```bash
+curl -X 'DELETE' \
+  'http://localhost:8000/v1/me/api-keys/5' \
+  -H 'Authorization: Bearer {jwt_token}'
 ```
 
 ## Testing
