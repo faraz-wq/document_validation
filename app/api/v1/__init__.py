@@ -2,4 +2,4 @@
 API v1 package initialization
 """
 
-from . import auth
+from . import auth, me_stats
