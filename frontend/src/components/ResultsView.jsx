@@ -26,9 +26,17 @@ const ResultsView = ({ summary, files, onReset }) => {
         if (useAnnotated) {
             // Use the annotated file URL from the backend
             return currentAnnotatedFile.annotated_url;
-        } else if (currentFile) {
-            // Fallback to original file
-            return URL.createObjectURL(currentFile);
+        }
+
+        if (currentFile) {
+            // If it's a File object (fresh upload)
+            if (currentFile instanceof File) {
+                return URL.createObjectURL(currentFile);
+            }
+            // If it has a url property (e.g. from session)
+            if (currentFile.url) {
+                return currentFile.url;
+            }
         }
         return null;
     }, [currentFile, currentAnnotatedFile, useAnnotated]);

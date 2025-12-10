@@ -411,12 +411,14 @@ from app.api.v1 import sessions as v1_sessions
 from app.api.v1 import me_api_keys as v1_me_api_keys
 from app.api.v1 import me_stats as v1_me_stats
 from app.api.v1 import me_logs as v1_me_logs
+from app.api.v1 import me_schemas as v1_me_schemas
 
 app.include_router(v1_auth.router, prefix="", tags=["v1-auth"])
 app.include_router(v1_sessions.router, prefix="/v1", tags=["v1-sessions"])
 app.include_router(v1_me_api_keys.router, prefix="/v1", tags=["v1-me-api-keys"])
 app.include_router(v1_me_stats.router, prefix="/v1", tags=["v1-me-stats"])
 app.include_router(v1_me_logs.router, prefix="/v1", tags=["v1-me-logs"])
+app.include_router(v1_me_schemas.router, tags=["v1-me-schemas"])
 
 # New v1 endpoints for configurable schemas
 @app.post("/v1/schemas")

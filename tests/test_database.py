@@ -24,9 +24,11 @@ class TestSessionDatabase:
         if os.path.exists(self.temp_db.name):
             os.unlink(self.temp_db.name)
         # Clean up any document directories created during tests
-        if os.path.exists("documents_v1"):
+        # Since documents directory is created in the same directory as the database file
+        documents_dir = Path(self.temp_db.name).parent / "documents_v1"
+        if documents_dir.exists():
             import shutil
-            shutil.rmtree("documents_v1")
+            shutil.rmtree(documents_dir, ignore_errors=True)
 
     def test_initialization(self):
         """Test database initialization"""
