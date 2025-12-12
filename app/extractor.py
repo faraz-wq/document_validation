@@ -68,6 +68,7 @@ class GeminiExtractor:
            - "filename": the source filename
            - "page": the page number (1-indexed)
            - "coordinates": an array of 4 numbers [y_min, x_min, y_max, x_max] representing the normalized bounding box scaled to 1000x1000, where (0,0) is the top-left corner
+           - IMPORTANT: Make the bounding boxes GENEROUS - include some padding around the actual text (approximately 10-20 units on each side) to ensure they are clearly visible and easy to interact with
         7. Return ONLY the valid JSON object. Do not include markdown formatting like ```json ... ```.
         """
 
