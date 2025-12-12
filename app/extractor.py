@@ -67,8 +67,8 @@ class GeminiExtractor:
         6. Populate the 'bounding_boxes' dictionary. For EVERY extracted field, provide the bounding box coordinates where that data appears in the document. Use the field name as the key (with dot notation for nested fields) and provide an object with:
            - "filename": the source filename
            - "page": the page number (1-indexed)
-           - "coordinates": an array of 4 numbers [y_min, x_min, y_max, x_max] representing the normalized bounding box scaled to 1000x1000, where (0,0) is the top-left corner
-           - IMPORTANT: Make the bounding boxes GENEROUS - include some padding around the actual text (approximately 10-20 units on each side) to ensure they are clearly visible and easy to interact with
+           - "coordinates": an array of 4 numbers [y_min, x_min, y_max, x_max] representing the normalized bounding box in the range 0.0 to 1.0, where (0,0) is the top-left corner and (1,1) is the bottom-right corner
+           - IMPORTANT: Make the bounding boxes GENEROUS - include some padding around the actual text (approximately 0.01-0.02 on each side) to ensure they are clearly visible and easy to interact with
         7. Return ONLY the valid JSON object. Do not include markdown formatting like ```json ... ```.
         """
 
