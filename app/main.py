@@ -343,33 +343,22 @@ def get_session(session_id: str):
 def get_session_document(session_id: str, filename: str):
     """Retrieve a specific document from a session"""
     try:
-        # Get the document record from the database
-        conn = sqlite3.connect(db.db_path)
-        cursor = conn.cursor()
+        # Get the document record from the database using the SQLAlchemy session
+        from app.db.database import SessionLocal
+        from app.db.models import Document
 
-        cursor.execute("""
-            SELECT file_data, mime_type
-            FROM documents
-            WHERE session_id = ? AND filename = ?
-        """, (session_id, filename))
+        db_session = SessionLocal()
+        try:
+            db_document = db_session.query(Document).filter(
+                Document.session_id == session_id,
+                Document.filename == filename
+            ).first()
 
-        row = cursor.fetchone()
-        conn.close()
+            if not db_document:
+                raise HTTPException(status_code=404, detail="Document not found")
 
-        if not row:
-            raise HTTPException(status_code=404, detail="Document not found")
-
-        file_data, mime_type = row
-
-        # Check if file_data is binary content (old format) or file path (new format)
-        if isinstance(file_data, bytes):
-            # Old format: binary content stored directly in the database
-            # Return the binary content directly
-            content = file_data
-        else:
-            # New format: file path stored as string
             # Construct the full file path and read the content
-            full_path = Path("data/documents") / file_data
+            full_path = Path("data/documents_v1") / db_document.file_path
 
             if not full_path.exists():
                 raise HTTPException(status_code=404, detail="Document file not found")
@@ -378,13 +367,16 @@ def get_session_document(session_id: str, filename: str):
             with open(full_path, 'rb') as f:
                 content = f.read()
 
-        # Return the document as a response
-        from fastapi.responses import Response
-        return Response(
-            content=content,
-            media_type=mime_type or 'application/octet-stream',
-            headers={"Content-Disposition": f"inline; filename={filename}"}
-        )
+            # Return the document as a response
+            from fastapi.responses import Response
+            return Response(
+                content=content,
+                media_type=db_document.mime_type or 'application/octet-stream',
+                headers={"Content-Disposition": f"inline; filename={filename}"}
+            )
+        finally:
+            db_session.close()
+
     except HTTPException:
         raise
     except Exception as e:
