@@ -83,7 +83,7 @@ class ConfigurableExtractor:
         3. If a field is not found in the documents, use null (None) if it is optional. If it is required but missing, try to infer it from context if safe, otherwise fail or return a clear error indicator (but prefer returning the JSON with nulls where allowed).
         4. Populate 'source_documents' with the filename and inferred document title (e.g., 'Aadhaar Card', 'Application Form') for each file you processed that contributed data.
         5. Populate the 'citations' dictionary. For EVERY extracted field (including nested ones), add an entry where the key is the field name (using dot notation, e.g., 'applicant_name', 'income_details.total_gross_income') and the value is the source string containing the "Filename (Page X)". Example: "applicant_name": "application_form.pdf (Page 1)".
-        6. Populate the 'bounding_boxes' dictionary. For EVERY extracted field, provide the bounding box coordinates where that data appears in the document. Use the field name as the key (with dot notation for nested fields) and provide an object with:
+        6. Populate the 'bounding_boxes' dictionary. For EVERY extracted field, provide a LIST of bounding box objects for EVERY occurrence of that data in the documents. Use the field name as the key (with dot notation for nested fields) and provide a list of objects, each with:
            - "filename": the source filename
            - "page": the page number (1-indexed)
            - "coordinates": an array of 4 numbers [y_min, x_min, y_max, x_max] representing the normalized bounding box scaled to 1000x1000, where (0,0) is the top-left corner

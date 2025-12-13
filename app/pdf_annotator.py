@@ -44,15 +44,19 @@ def draw_bounding_boxes_on_pdf(
         
         # Group bounding boxes by page for efficient processing
         boxes_by_page = {}
-        for field_name, box_data in bounding_boxes.items():
-            # box_data is a dict with keys: filename, page, coordinates
-            page_num = box_data.get('page', 1)  # 1-indexed
-            if page_num not in boxes_by_page:
-                boxes_by_page[page_num] = []
-            boxes_by_page[page_num].append({
-                'field_name': field_name,
-                'coordinates': box_data.get('coordinates', [])
-            })
+        for field_name, box_data_or_list in bounding_boxes.items():
+            # Handle both list of boxes and single box dict for backward compatibility
+            box_list = box_data_or_list if isinstance(box_data_or_list, list) else [box_data_or_list]
+            
+            for box_data in box_list:
+                # box_data is a dict with keys: filename, page, coordinates
+                page_num = box_data.get('page', 1)  # 1-indexed
+                if page_num not in boxes_by_page:
+                    boxes_by_page[page_num] = []
+                boxes_by_page[page_num].append({
+                    'field_name': field_name,
+                    'coordinates': box_data.get('coordinates', [])
+                })
         
         logger.debug(f"Bounding boxes grouped across {len(boxes_by_page)} pages")
         

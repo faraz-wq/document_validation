@@ -120,11 +120,20 @@ async def extract_summary(
                     f.write(content)
                 
                 # Filter bounding boxes for this specific file
-                file_bounding_boxes = {
-                    field_name: bbox_data
-                    for field_name, bbox_data in result['bounding_boxes'].items()
-                    if bbox_data.get('filename') == filename
-                }
+                file_bounding_boxes = {}
+                for field_name, boxes in result['bounding_boxes'].items():
+                    # Handle both list and single dict for robustness
+                    if isinstance(boxes, dict):
+                        boxes = [boxes]
+                    
+                    if isinstance(boxes, list):
+                        # Filter boxes that belong to this file
+                        relevant_boxes = [
+                            box for box in boxes 
+                            if isinstance(box, dict) and box.get('filename') == filename
+                        ]
+                        if relevant_boxes:
+                            file_bounding_boxes[field_name] = relevant_boxes
                 
                 # Only annotate if there are bounding boxes for this file
                 if file_bounding_boxes:
@@ -238,11 +247,20 @@ async def submit_document(
             annotated_dir.mkdir(parents=True, exist_ok=True)
             
             # Filter bounding boxes for this specific file
-            file_bounding_boxes = {
-                field_name: bbox_data
-                for field_name, bbox_data in result['bounding_boxes'].items()
-                if bbox_data.get('filename') == filename
-            }
+            file_bounding_boxes = {}
+            for field_name, boxes in result['bounding_boxes'].items():
+                # Handle both list and single dict for robustness
+                if isinstance(boxes, dict):
+                    boxes = [boxes]
+                
+                if isinstance(boxes, list):
+                    # Filter boxes that belong to this file
+                    relevant_boxes = [
+                        box for box in boxes 
+                        if isinstance(box, dict) and box.get('filename') == filename
+                    ]
+                    if relevant_boxes:
+                        file_bounding_boxes[field_name] = relevant_boxes
             
             if file_bounding_boxes:
                 try:
@@ -569,11 +587,20 @@ async def extract_summary_custom(
                     f.write(content)
 
                 # Filter bounding boxes for this specific file
-                file_bounding_boxes = {
-                    field_name: bbox_data
-                    for field_name, bbox_data in result['bounding_boxes'].items()
-                    if bbox_data.get('filename') == filename
-                }
+                file_bounding_boxes = {}
+                for field_name, boxes in result['bounding_boxes'].items():
+                    # Handle both list and single dict for robustness
+                    if isinstance(boxes, dict):
+                        boxes = [boxes]
+                    
+                    if isinstance(boxes, list):
+                        # Filter boxes that belong to this file
+                        relevant_boxes = [
+                            box for box in boxes 
+                            if isinstance(box, dict) and box.get('filename') == filename
+                        ]
+                        if relevant_boxes:
+                            file_bounding_boxes[field_name] = relevant_boxes
 
                 # Only annotate if there are bounding boxes for this file
                 if file_bounding_boxes:

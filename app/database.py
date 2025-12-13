@@ -78,15 +78,26 @@ class SessionDatabase:
                 db.add(db_document)
 
             # Insert bounding boxes
-            for field_name, bbox in bounding_boxes.items():
-                db_bounding_box = BoundingBox(
-                    session_id=session_id,
-                    field_name=field_name,
-                    filename=bbox['filename'],
-                    page=bbox['page'],
-                    coordinates=bbox['coordinates']  # Store as JSON directly
-                )
-                db.add(db_bounding_box)
+            for field_name, bbox_data in bounding_boxes.items():
+                # Handle both list and single dict
+                if isinstance(bbox_data, dict):
+                    bbox_list = [bbox_data]
+                elif isinstance(bbox_data, list):
+                    bbox_list = bbox_data
+                else:
+                    continue
+
+                for bbox in bbox_list:
+                    if not isinstance(bbox, dict): continue
+                    
+                    db_bounding_box = BoundingBox(
+                        session_id=session_id,
+                        field_name=field_name,
+                        filename=bbox.get('filename'),
+                        page=bbox.get('page'),
+                        coordinates=bbox.get('coordinates')
+                    )
+                    db.add(db_bounding_box)
 
             # Insert citations
             for field_name, citation in citations.items():
@@ -132,11 +143,14 @@ class SessionDatabase:
 
             bounding_boxes = {}
             for bbox in db_bounding_boxes:
-                bounding_boxes[bbox.field_name] = {
+                if bbox.field_name not in bounding_boxes:
+                    bounding_boxes[bbox.field_name] = []
+                
+                bounding_boxes[bbox.field_name].append({
                     'filename': bbox.filename,
                     'page': bbox.page,
                     'coordinates': bbox.coordinates
-                }
+                })
 
             citations = {}
             for citation in db_citations:

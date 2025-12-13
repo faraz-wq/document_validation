@@ -160,6 +160,62 @@ def login(
     )
 
 
+@router.post("/token", response_model=LoginResponse)
+def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    """
+    OAuth2 compatible token login, get an access token for future requests
+    """
+    # Fetch user by email (username field in form_data contains email)
+    user = db.query(UserModel).filter(UserModel.email == form_data.username).first()
+
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or user is inactive",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Verify password
+    if not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Create access and refresh tokens
+    access_token_data = {
+        "sub": str(user.id),
+        "email": user.email,
+        "is_admin": user.is_admin
+    }
+
+    refresh_token_data = {
+        "sub": str(user.id),
+        "type": "refresh"
+    }
+
+    access_token = create_access_token(access_token_data)
+    refresh_token = create_refresh_token(refresh_token_data)
+
+    user_out = UserOut(
+        id=user.id,
+        email=user.email,
+        username=user.username,
+        is_admin=user.is_admin
+    )
+
+    return LoginResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        user=user_out
+    )
+
+
 @router.post("/refresh", response_model=TokenRefreshResponse)
 def refresh_token(
     request: TokenRefreshRequest,

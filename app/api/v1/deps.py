@@ -2,8 +2,8 @@
 Dependencies for v1 API routes
 """
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, status, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import Annotated
 
@@ -11,11 +11,11 @@ from app.db import get_db, User
 from app.core.security import decode_token
 from app.db.models import User as UserModel
 
-# OAuth2 scheme for JWT authentication (v1-only)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/login")
+# Simple JWT authentication scheme
+bearer_scheme = HTTPBearer()
 
 def get_current_user_from_jwt(
-    token: Annotated[str, Depends(oauth2_scheme)],
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
     db: Session = Depends(get_db),
 ) -> UserModel:
     """
@@ -26,17 +26,18 @@ def get_current_user_from_jwt(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
+    token = credentials.credentials
     payload = decode_token(token)
     if payload is None:
         raise credentials_exception
-    
+
     user_id: str = payload.get("sub")
     if user_id is None:
         raise credentials_exception
-    
+
     user = db.query(UserModel).filter(UserModel.id == int(user_id)).first()
     if user is None or not user.is_active:
         raise credentials_exception
-    
+
     return user

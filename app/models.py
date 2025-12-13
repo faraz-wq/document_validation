@@ -92,9 +92,9 @@ class IntegratedCertificateSummary(ApplicantCommon):
         default_factory=dict,
         description="Map of field names to their source (filename and page number). Use dot notation for nested fields (e.g. 'applicant_name', 'income_details.total_gross_income')."
     )
-    bounding_boxes: Dict[str, BoundingBox] = Field(
+    bounding_boxes: Dict[str, List[BoundingBox]] = Field(
         default_factory=dict,
-        description="Map of field names to their bounding box coordinates. Use dot notation for nested fields."
+        description="Map of field names to a list of their bounding box coordinates (one for each occurrence). Use dot notation for nested fields."
     )
 
 # --- 2. Income Certificate ---
@@ -110,9 +110,9 @@ class IncomeCertificateSummary(ApplicantCommon):
         default_factory=dict,
         description="Map of field names to their source (filename and page number). Use dot notation for nested fields."
     )
-    bounding_boxes: Dict[str, BoundingBox] = Field(
+    bounding_boxes: Dict[str, List[BoundingBox]] = Field(
         default_factory=dict,
-        description="Map of field names to their bounding box coordinates. Use dot notation for nested fields."
+        description="Map of field names to a list of their bounding box coordinates (one for each occurrence). Use dot notation for nested fields."
     )
 
 # --- 3. OBC Certificate ---
@@ -129,9 +129,9 @@ class OBCCertificateSummary(ApplicantCommon):
         default_factory=dict,
         description="Map of field names to their source (filename and page number). Use dot notation for nested fields."
     )
-    bounding_boxes: Dict[str, BoundingBox] = Field(
+    bounding_boxes: Dict[str, List[BoundingBox]] = Field(
         default_factory=dict,
-        description="Map of field names to their bounding box coordinates. Use dot notation for nested fields."
+        description="Map of field names to a list of their bounding box coordinates (one for each occurrence). Use dot notation for nested fields."
     )
 
 # --- 4. EWS Income & Asset Certificate ---
@@ -148,9 +148,9 @@ class EWSCertificateSummary(ApplicantCommon):
         default_factory=dict,
         description="Map of field names to their source (filename and page number). Use dot notation for nested fields."
     )
-    bounding_boxes: Dict[str, BoundingBox] = Field(
+    bounding_boxes: Dict[str, List[BoundingBox]] = Field(
         default_factory=dict,
-        description="Map of field names to their bounding box coordinates. Use dot notation for nested fields."
+        description="Map of field names to a list of their bounding box coordinates (one for each occurrence). Use dot notation for nested fields."
     )
 
 # --- 5. Family Member Certificate ---
@@ -166,7 +166,7 @@ class FamilyMemberCertificateSummary(ApplicantCommon):
         default_factory=dict,
         description="Map of field names to their source (filename and page number). Use dot notation for nested fields."
     )
-    bounding_boxes: Dict[str, BoundingBox] = Field(
+    bounding_boxes: Dict[str, List[BoundingBox]] = Field(
         default_factory=dict,
-        description="Map of field names to their bounding box coordinates. Use dot notation for nested fields."
+        description="Map of field names to a list of their bounding box coordinates (one for each occurrence). Use dot notation for nested fields."
     )
