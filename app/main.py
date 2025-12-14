@@ -2,14 +2,17 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Dep
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from typing import List, Annotated
+from typing import List, Annotated, Optional
 import uvicorn
 import logging
 import json
 import shutil
 import os
+import csv
+from datetime import datetime
 import sqlite3
 from pathlib import Path
+from pydantic import BaseModel
 from app.logging_config import setup_logging, get_logger
 from app.extractor import GeminiExtractor, ExtractionError
 from app.database import db
@@ -657,6 +660,36 @@ async def extract_summary_custom(
         logger.error(f"Unexpected error in extract_summary_custom: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
+
+
+class FeedbackRequest(BaseModel):
+    session_id: str
+    field_name: str
+    feedback_type: str  # "upvote" or "downvote"
+    feedback_text: Optional[str] = None
+
+@app.post("/feedback")
+async def submit_feedback(feedback: FeedbackRequest):
+    feedback_file = "feedback.csv"
+    file_exists = os.path.isfile(feedback_file)
+    
+    try:
+        with open(feedback_file, mode='a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(["timestamp", "session_id", "field_name", "feedback_type", "feedback_text"])
+            
+            writer.writerow([
+                datetime.now().isoformat(),
+                feedback.session_id,
+                feedback.field_name,
+                feedback.feedback_type,
+                feedback.feedback_text or ""
+            ])
+        return {"status": "success", "message": "Feedback recorded"}
+    except Exception as e:
+        logger.error(f"Error saving feedback: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save feedback: {str(e)}")
 
 @app.on_event("startup")
 async def startup_event():
