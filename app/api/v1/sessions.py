@@ -6,6 +6,14 @@ from pydantic import BaseModel
 from app.db.database import get_db
 from app.db.models import Session as SessionModel, User as UserModel
 from app.api.v1.deps import get_current_user_from_jwt
+import uuid
+from pathlib import Path, PurePath
+from typing import Dict, Any, List, Optional
+from app.db.database import SessionLocal
+from app.db.models import Session as SessionModel, Document, BoundingBox, Citation
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/me/sessions", tags=["v1-user-sessions"])
 
@@ -161,3 +169,105 @@ def get_user_session(
         citations=citations,
         documents=document_list
     )
+
+
+def create_session(
+    application_type: str,
+    summary: Dict[str, Any],
+    files: List[Dict[str, Any]],
+    token_usage: Optional[Dict[str, int]] = None,
+    user_id: Optional[int] = None,
+    api_key_id: Optional[int] = None
+) -> str:
+    """Create a new session and store all related data"""
+    session_id = str(uuid.uuid4())
+    
+    # Create directory for storing documents
+    documents_dir = Path("data/documents_v1")
+    documents_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create a new database session
+    db = SessionLocal()
+    try:
+        # Extract bounding boxes and citations from summary
+        # We need to be careful not to modify the original summary dict if it's used elsewhere
+        # But here we are passed a copy or we should copy it
+        summary_copy = summary.copy()
+        bounding_boxes = summary_copy.pop('bounding_boxes', {})
+        citations = summary_copy.pop('citations', {})
+        token_usage_data = summary_copy.pop('_token_usage', token_usage)
+
+        # Create session
+        db_session = SessionModel(
+            session_id=session_id,
+            application_type=application_type,
+            summary_json=summary_copy,
+            token_usage_json=token_usage_data,
+            user_id=user_id,
+            api_key_id=api_key_id
+        )
+        db.add(db_session)
+
+        # Insert documents
+        for file_data in files:
+            # Save document file to disk
+            safe_filename = PurePath(file_data['filename']).name
+            document_path = documents_dir / f"{session_id}_{safe_filename}"
+
+            # Write the file content to disk
+            with open(document_path, 'wb') as f:
+                f.write(file_data['content'])
+
+            # Store the relative file path in the database (relative to the documents directory)
+            relative_path = str(document_path.relative_to(documents_dir))
+
+            db_document = Document(
+                session_id=session_id,
+                filename=file_data['filename'],
+                file_path=relative_path,  # Store the path to the file
+                mime_type=file_data.get('mime_type'),
+                file_size=len(file_data['content'])
+            )
+            db.add(db_document)
+
+        # Insert bounding boxes
+        for field_name, bbox_data in bounding_boxes.items():
+            # Handle both list and single dict
+            if isinstance(bbox_data, dict):
+                bbox_list = [bbox_data]
+            elif isinstance(bbox_data, list):
+                bbox_list = bbox_data
+            else:
+                continue
+
+            for bbox in bbox_list:
+                if not isinstance(bbox, dict): continue
+                
+                db_bounding_box = BoundingBox(
+                    session_id=session_id,
+                    field_name=field_name,
+                    filename=bbox.get('filename'),
+                    page=bbox.get('page'),
+                    coordinates=bbox.get('coordinates')
+                )
+                db.add(db_bounding_box)
+
+        # Insert citations
+        for field_name, citation in citations.items():
+            db_citation = Citation(
+                session_id=session_id,
+                field_name=field_name,
+                citation=citation
+            )
+            db.add(db_citation)
+
+        db.commit()
+        logger.info(f"Created session {session_id} for {application_type}")
+        return session_id
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating session: {e}", exc_info=True)
+        raise
+    finally:
+        db.close()

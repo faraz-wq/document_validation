@@ -171,7 +171,7 @@ async def extract_summary(
         
         # Store in database
         try:
-            session_id = db.create_session(
+            session_id = v1_sessions.create_session(
                 application_type=application_type,
                 summary=result.copy(),  # Make a copy since create_session modifies it
                 files=file_data_list
