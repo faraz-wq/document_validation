@@ -13,10 +13,7 @@ from app.logging_config import get_logger
 logger = get_logger(__name__)
 
 # Database URL from environment variable
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://docval_user:docval_dev_password@localhost:5432/document_validation"
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Create SQLAlchemy engine
 # For development, we use NullPool to avoid connection issues with Docker restarts

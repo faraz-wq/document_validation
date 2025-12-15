@@ -25,7 +25,7 @@ class ExtractionError(Exception):
     pass
 
 class ConfigurableExtractor:
-    def __init__(self, model_name: str = "gemini-2.5-pro", user_id: str = "default"):
+    def __init__(self, model_name: str = "gemini-2.5-flash", user_id: str = "default"):
         self.model = GenerativeModel(model_name)
         self.user_id = user_id
         logger.info(f"ConfigurableExtractor initialized with model: {model_name} for user: {user_id}")
