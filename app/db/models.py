@@ -156,6 +156,7 @@ class BoundingBox(Base):
     session_id = Column(String(36), ForeignKey("sessions.session_id", ondelete="CASCADE"), nullable=False)
     field_name = Column(String(255), nullable=False)
     filename = Column(String(255), nullable=False)
+    document_title = Column(String(255), nullable=True)
     page = Column(Integer, nullable=False)
     coordinates = Column(JSON, nullable=False)  # [y_min, x_min, y_max, x_max]
 

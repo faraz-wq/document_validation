@@ -95,6 +95,8 @@ class SessionDetailResponse(BaseModel):
     bounding_boxes: dict = {}
     citations: dict = {}
     documents: list = []
+    source_documents: Optional[List[dict]] = []
+    errors: Optional[List[Any]] = []
 
 
 @router.get("/{session_id}", response_model=SessionDetailResponse)
@@ -149,6 +151,7 @@ def get_user_session(
         for bbox in session.bounding_boxes:
             bounding_boxes[bbox.field_name] = {
                 'filename': bbox.filename,
+                'document_title': bbox.document_title,
                 'page': bbox.page,
                 'coordinates': bbox.coordinates
             }
@@ -159,15 +162,22 @@ def get_user_session(
         for citation in session.citations:
             citations[citation.field_name] = citation.citation
 
+    # Extract source_documents and errors from summary_json
+    summary_data = session.summary_json.copy() if session.summary_json else {}
+    source_documents = summary_data.pop('source_documents', [])
+    errors = summary_data.pop('_errors', [])
+
     # Return session data similar to existing /sessions/{session_id} endpoint
     return SessionDetailResponse(
         session_id=session.session_id,
         application_type=session.application_type,
         created_at=session.created_at,
-        summary=session.summary_json,
+        summary=summary_data,
         bounding_boxes=bounding_boxes,
         citations=citations,
-        documents=document_list
+        documents=document_list,
+        source_documents=source_documents,
+        errors=errors
     )
 
 
@@ -247,6 +257,7 @@ def create_session(
                     session_id=session_id,
                     field_name=field_name,
                     filename=bbox.get('filename'),
+                    document_title=bbox.get('document_title'),
                     page=bbox.get('page'),
                     coordinates=bbox.get('coordinates')
                 )

@@ -58,19 +58,105 @@ class GeminiExtractor:
         STRICTLY follow this JSON schema for the output:
         {json.dumps(schema_json, indent=2)}
 
-        Instructions:
-        1. Analyze ALL provided document images/PDFs.
-        2. Extract the fields defined in the schema.
-        3. If a field is not found in the documents, use null (None) if it is optional. If it is required but missing, try to infer it from context if safe, otherwise fail or return a clear error indicator (but prefer returning the JSON with nulls where allowed).
-        4. Populate 'source_documents' with the filename and inferred document title (e.g., 'Aadhaar Card', 'Application Form') for each file you processed that contributed data.
-        5. Populate the 'citations' dictionary. For EVERY extracted field (including nested ones), add an entry where the key is the field name (using dot notation, e.g., 'applicant_name', 'income_details.total_gross_income') and the value is the source string containing the "Filename (Page X)". Example: "applicant_name": "application_form.pdf (Page 1)".
-         6. Populate the 'bounding_boxes' dictionary. For EVERY extracted field, provide a LIST of bounding box objects for EVERY occurrence of that data in the documents. Use the field name as the key (with dot notation for nested fields) and provide a list of objects, each with:
-           - "filename": the source filename
-           - "page": the page number (1-indexed)
-           - "coordinates": an array of 4 numbers [y_min, x_min, y_max, x_max] representing the normalized bounding box in the range 0.0 to 1.0, where (0,0) is the top-left corner and (1,1) is the bottom-right corner
-           - IMPORTANT: Make the bounding boxes GENEROUS, especially horizontally. Include significant padding (approx 0.02-0.03) on the left and right to ensure NO text is cut off, and moderate padding (0.01) on top and bottom.
-        7. Return ONLY the valid JSON object. Do not include markdown formatting like ```json ... ```.
+        ========================
+        CRITICAL OUTPUT RULES
+        ========================
+        - Return ONLY a single valid JSON object.
+        - Do NOT include markdown, explanations, comments, or extra text.
+        - The JSON MUST strictly conform to the provided schema.
+        - Do NOT invent fields that are not present in the schema.
+
+        ========================
+        DOCUMENT ANALYSIS RULES
+        ========================
+        1. Analyze ALL provided document images and PDFs.
+        2. Treat all documents as potentially relevant unless clearly unrelated.
+        3. Do NOT assume values from prior knowledge — only use visible document content.
+
+        ========================
+        FIELD EXTRACTION RULES
+        ========================
+        4. Extract ONLY the fields defined in the schema.
+        5. For each field:
+        - If found: extract exactly as written in the document (no rephrasing).
+        - If optional and not found: use null.
+        - If required and not found:
+            - Infer ONLY if the inference is extremely safe and unambiguous.
+            - Otherwise set null and add an entry to a top-level "_errors" array explaining the missing field.
+        6. For array fields:
+        - Return an empty list [] if no items are found.
+        - Each array element must be fully populated according to the schema.
+
+        ========================
+        SOURCE DOCUMENTS
+        ========================
+        7. Populate "source_documents" with ALL files that contributed at least one extracted field.
+        Each entry must include:
+        - filename
+        - inferred document type/title (e.g., "Aadhaar Card", "Income Certificate", "Application Form")
+
+        ========================
+        CITATIONS (MANDATORY)
+        ========================
+        8. Populate the "citations" dictionary.
+        9. EVERY extracted field (including nested fields and array elements) MUST have a citation.
+        10. Use DOT NOTATION for field names, including array indices:
+            Examples:
+            - "applicant_name"
+            - "income_details.total_gross_income"
+            - "dependents[0].name"
+        11. Citation value format:
+            "Filename (Page X)"
+
+        ========================
+        BOUNDING BOXES (MANDATORY)
+        ========================
+        12. Populate the "bounding_boxes" dictionary.
+        13. EVERY extracted field MUST have a bounding box entry.
+        14. Use DOT NOTATION for field names, including array indices.
+        15. Each field maps to a LIST of bounding box objects.
+        16. If a field appears multiple times, include ALL occurrences.
+
+        17. Bounding box object structure:                             
+        {{
+            "filename": "<source file>",
+            "document_title": "<inferred document type/title>",
+            "page": <1-indexed page number>,
+            "coordinates": [y_min, x_min, y_max, x_max]
+        }}
+
+        ========================
+        BOUNDING BOX CONSTRAINTS
+        ========================
+        18. Coordinates are NORMALIZED floats between 0.0 and 1.0.
+        19. Coordinate order is STRICTLY:
+            [y_min, x_min, y_max, x_max]
+        20. (0.0, 0.0) = top-left, (1.0, 1.0) = bottom-right.
+        21. Bounding boxes MUST tightly enclose the visible text but with padding:
+            - Horizontal padding: +0.02 to +0.03 on left and right
+            - Vertical padding: +0.01 on top and bottom
+        22. DO NOT hallucinate bounding boxes:
+            - If text is not visibly present, DO NOT create a bounding box.
+            - If field value is null, bounding_boxes entry MUST be an empty list [].
+
+        ========================
+        CONSISTENCY RULES
+        ========================
+        23. The "document_title" in bounding boxes MUST:
+            - Be inferred from visible document content (headers, logos, keywords)
+            - Match EXACTLY one of the document titles used in "source_documents"
+            - Be consistent across all bounding boxes from the same document
+
+        ========================
+        FINAL VALIDATION
+        ========================
+        24. Ensure:
+            - "citations" and "bounding_boxes" contain EXACTLY the same field keys
+            - every non-null field has at least one bounding box
+            - every bounding box corresponds to visible text in the document
+        25. Return the final JSON object ONLY.
         """
+
 
         logger.debug(f"Prompt created with length: {len(prompt)} characters")
         return prompt
@@ -184,7 +270,7 @@ class GeminiExtractor:
                           f"Response: {token_usage['candidates_token_count']}, "
                           f"Total: {token_usage['total_token_count']}")
             
-            result = validated_data.model_dump()
+            result = validated_data.model_dump(by_alias=True)
             result['_token_usage'] = token_usage
             
             return result

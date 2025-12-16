@@ -35,7 +35,7 @@ from fastapi.middleware.cors import CORSMiddleware
  
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://data-extraction-hub.vercel.app/", "http://localhost:3000", "http://localhost:8080"],  # For development convenience, allow all. In prod, specify domains.
+    allow_origins=["https://data-extraction-hub.vercel.app", "http://localhost:3000", "http://localhost:8080"],  # For development convenience, allow all. In prod, specify domains.
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

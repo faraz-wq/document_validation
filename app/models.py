@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 
 # ==============================================================================
 # 1. COMMON NESTED MODELS (Reusable across all services for consistency)
@@ -17,6 +17,7 @@ class SourceDocument(BaseModel):
 class BoundingBox(BaseModel):
     """Bounding box coordinates for a field in a document."""
     filename: str = Field(description="The filename where this data was found")
+    document_title: Optional[str] = Field(default=None, description="The inferred title or type of the document")
     page: int = Field(description="Page number (1-indexed)")
     coordinates: List[float] = Field(
         description="Normalized bounding box coordinates [y_min, x_min, y_max, x_max] scaled to 1000x1000"
@@ -96,6 +97,11 @@ class IntegratedCertificateSummary(ApplicantCommon):
         default_factory=dict,
         description="Map of field names to a list of their bounding box coordinates (one for each occurrence). Use dot notation for nested fields."
     )
+    errors: Optional[List[Any]] = Field(
+        default_factory=list,
+        alias="_errors",
+        description="List of extraction errors or missing fields."
+    )
 
 # --- 2. Income Certificate ---
 class IncomeCertificateSummary(ApplicantCommon):
@@ -113,6 +119,11 @@ class IncomeCertificateSummary(ApplicantCommon):
     bounding_boxes: Dict[str, List[BoundingBox]] = Field(
         default_factory=dict,
         description="Map of field names to a list of their bounding box coordinates (one for each occurrence). Use dot notation for nested fields."
+    )
+    errors: Optional[List[Any]] = Field(
+        default_factory=list,
+        alias="_errors",
+        description="List of extraction errors or missing fields."
     )
 
 # --- 3. OBC Certificate ---
@@ -133,6 +144,11 @@ class OBCCertificateSummary(ApplicantCommon):
         default_factory=dict,
         description="Map of field names to a list of their bounding box coordinates (one for each occurrence). Use dot notation for nested fields."
     )
+    errors: Optional[List[Any]] = Field(
+        default_factory=list,
+        alias="_errors",
+        description="List of extraction errors or missing fields."
+    )
 
 # --- 4. EWS Income & Asset Certificate ---
 class EWSCertificateSummary(ApplicantCommon):
@@ -152,6 +168,11 @@ class EWSCertificateSummary(ApplicantCommon):
         default_factory=dict,
         description="Map of field names to a list of their bounding box coordinates (one for each occurrence). Use dot notation for nested fields."
     )
+    errors: Optional[List[Any]] = Field(
+        default_factory=list,
+        alias="_errors",
+        description="List of extraction errors or missing fields."
+    )
 
 # --- 5. Family Member Certificate ---
 class FamilyMemberCertificateSummary(ApplicantCommon):
@@ -169,4 +190,9 @@ class FamilyMemberCertificateSummary(ApplicantCommon):
     bounding_boxes: Dict[str, List[BoundingBox]] = Field(
         default_factory=dict,
         description="Map of field names to a list of their bounding box coordinates (one for each occurrence). Use dot notation for nested fields."
+    )
+    errors: Optional[List[Any]] = Field(
+        default_factory=list,
+        alias="_errors",
+        description="List of extraction errors or missing fields."
     )
