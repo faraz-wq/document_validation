@@ -13,6 +13,10 @@ class SourceDocument(BaseModel):
     filename: str = Field(
         description="The original filename of the document (e.g., 'caste.pdf')."
     )
+    page_numbers: List[int] = Field(
+        default_factory=list,
+        description="List of page numbers (1-indexed) where this document type was found."
+    )
 
 class BoundingBox(BaseModel):
     """Bounding box coordinates for a field in a document."""
