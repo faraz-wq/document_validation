@@ -5,6 +5,7 @@ Handles API key validation and management with PostgreSQL
 
 from typing import Optional, Dict, Any
 from fastapi import HTTPException, status, Header, Request, Depends
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 import hashlib
@@ -12,8 +13,11 @@ import secrets
 
 from app.db import get_db, User, ApiKey
 from app.logging_config import get_logger
+from app.core.security import decode_token
 
 logger = get_logger(__name__)
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/token", auto_error=False)
 
 
 def create_api_key(db: Session, user_id: int, description: str = "") -> str:
@@ -79,40 +83,73 @@ def validate_api_key(db: Session, api_key: str) -> Optional[ApiKey]:
 def get_user_from_api_key(
     request: Request,
     x_api_key: Optional[str] = Header(None),
+    token: Optional[str] = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ) -> User:
     """
-    FastAPI dependency: Validate API key from header and return user information
-    Also sets request.state.api_key_id for observability middleware
+    FastAPI dependency: Validate authentication via API key OR JWT token.
+    Returns the authenticated user.
     """
-    if not x_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API key missing. Please provide X-API-Key header."
-        )
-    
-    # Validate the API key
-    api_key = validate_api_key(db, x_api_key)
-    
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or inactive API key"
-        )
-    
-    # Set API key ID on request state for observability middleware
-    request.state.api_key_id = api_key.id
-    request.state.api_key = api_key
-    
-    # Return the user
-    user = api_key.owner
-    if not user or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account is inactive"
-        )
-    
-    return user
+    # 1. Try API Key first
+    if x_api_key:
+        api_key = validate_api_key(db, x_api_key)
+        
+        if not api_key:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or inactive API key"
+            )
+        
+        # Set API key ID on request state for observability middleware
+        request.state.api_key_id = api_key.id
+        request.state.api_key = api_key
+        
+        # Return the user
+        user = api_key.owner
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User account is inactive"
+            )
+        return user
+
+    # 2. Try JWT Token
+    if token:
+        payload = decode_token(token)
+        if payload is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found or inactive",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            
+        # No API key ID for JWT auth
+        request.state.api_key_id = None
+        request.state.api_key = None
+        
+        return user
+
+    # 3. Neither provided
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required. Provide X-API-Key header or Bearer token."
+    )
 
 
 def get_current_admin_user(

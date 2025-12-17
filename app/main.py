@@ -27,6 +27,7 @@ from app.models import (
 from app.schemas.schema_models import SchemaDefinition
 from app.core.configurable_extractor import ConfigurableExtractor
 from app.utils.auth import get_user_from_api_key
+from app.db.models import User
 
 # Setup for UI
 app = FastAPI(title="Document Validation Service")
@@ -437,13 +438,13 @@ app.include_router(v1_me_schemas.router, tags=["v1-me-schemas"])
 @app.post("/v1/schemas")
 async def create_schema(
     schema_def: SchemaDefinition,
-    api_key: str = Depends(get_user_from_api_key)
+    current_user: User = Depends(get_user_from_api_key)
 ):
     """Create a new custom schema definition"""
     from app.core.schema_registry import schema_registry
 
     # Set current user from API key validation
-    schema_def.created_by = api_key["user_id"]
+    schema_def.created_by = current_user.id
 
     success = schema_registry.register_schema(schema_def)
     if not success:
@@ -455,12 +456,12 @@ async def create_schema(
 @app.get("/v1/schemas/{schema_id}")
 async def get_schema(
     schema_id: str,
-    api_key: str = Depends(get_user_from_api_key)
+    current_user: User = Depends(get_user_from_api_key)
 ):
     """Get a specific schema definition"""
     from app.core.schema_registry import schema_registry
 
-    user_id = api_key["user_id"]
+    user_id = current_user.id
     schema = schema_registry.get_schema(schema_id, user_id)
     if not schema:
         raise HTTPException(status_code=404, detail="Schema not found or access denied")
@@ -470,12 +471,12 @@ async def get_schema(
 
 @app.get("/v1/schemas")
 async def list_schemas(
-    api_key: str = Depends(get_user_from_api_key)
+    current_user: User = Depends(get_user_from_api_key)
 ):
     """List all schemas accessible to the user"""
     from app.core.schema_registry import schema_registry
 
-    user_id = api_key["user_id"]
+    user_id = current_user.id
     schemas = schema_registry.list_user_schemas(user_id)
     return {"schemas": schemas}
 
@@ -484,12 +485,12 @@ async def list_schemas(
 async def update_schema(
     schema_id: str,
     updates: dict,
-    api_key: str = Depends(get_user_from_api_key)
+    current_user: User = Depends(get_user_from_api_key)
 ):
     """Update an existing schema definition"""
     from app.core.schema_registry import schema_registry
 
-    user_id = api_key["user_id"]
+    user_id = current_user.id
     success = schema_registry.update_schema(schema_id, user_id, updates)
     if not success:
         raise HTTPException(status_code=403, detail="Access denied or schema not found")
@@ -500,12 +501,12 @@ async def update_schema(
 @app.delete("/v1/schemas/{schema_id}")
 async def delete_schema(
     schema_id: str,
-    api_key: str = Depends(get_user_from_api_key)
+    current_user: User = Depends(get_user_from_api_key)
 ):
     """Delete a schema definition"""
     from app.core.schema_registry import schema_registry
 
-    user_id = api_key["user_id"]
+    user_id = current_user.id
     success = schema_registry.delete_schema(schema_id, user_id)
     if not success:
         raise HTTPException(status_code=403, detail="Access denied or schema not found")
@@ -518,14 +519,14 @@ async def extract_summary_custom(
     request: Request,
     schema_id: Annotated[str, Form(..., description="ID of the custom schema to use")],
     files: List[UploadFile] = File(..., description="List of document files"),
-    api_key: str = Depends(get_user_from_api_key)
+    current_user: User = Depends(get_user_from_api_key)
 ):
     """
     Extracts structured summary from uploaded documents using a custom schema.
     """
     from app.core.schema_registry import schema_registry
 
-    user_id = api_key.id  # api_key here refers to the User object returned by get_user_from_api_key dependency
+    user_id = current_user.id
     api_key_id = request.state.api_key_id  # Get the API key ID from request state
 
     # Validate that user has access to this schema
