@@ -20,6 +20,8 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # In production, you'd want to use a proper connection pool
 engine = create_engine(
     DATABASE_URL,
+    pool_pre_ping=True,
+    pool_recycle=300,
     poolclass=NullPool if os.getenv("ENV") == "development" else None,
     echo=os.getenv("SQL_ECHO", "false").lower() == "true",  # Set SQL_ECHO=true to see SQL queries
 )

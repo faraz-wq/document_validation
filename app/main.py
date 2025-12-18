@@ -25,7 +25,7 @@ from app.models import (
 )
 from app.schemas.schema_models import SchemaDefinition
 from app.core.configurable_extractor import ConfigurableExtractor
-from app.utils.auth import get_user_from_api_key
+from app.utils.auth import get_user_from_api_key, get_optional_user
 from app.db.models import User
 
 # Setup for UI
@@ -57,8 +57,10 @@ logger.info("GeminiExtractor initialized")
 
 @app.post("/extract-summary")
 async def extract_summary(
+    request: Request,
     application_type: Annotated[str, Form(..., description="Type of application service")],
-    files: List[UploadFile] = File(..., description="List of document files")
+    files: List[UploadFile] = File(..., description="List of document files"),
+    current_user: Optional[User] = Depends(get_optional_user)
 ):
     """
     Extracts structured summary from uploaded documents based on the application type.
@@ -104,65 +106,19 @@ async def extract_summary(
 
         logger.info(f"Results stored in: {output_file_path}")
         
-        # Annotate documents with bounding boxes
-        annotated_files = []
-        if result.get('bounding_boxes'):
-            logger.info("Annotating documents with bounding boxes")
-            
-            # Create directories for uploaded and annotated files
-            uploads_dir = Path(parent_dir) / "static" / "uploads"
-            annotated_dir = Path(parent_dir) / "static" / "annotated"
-            uploads_dir.mkdir(parents=True, exist_ok=True)
-            annotated_dir.mkdir(parents=True, exist_ok=True)
-            
-            import concurrent.futures
 
-            def annotation_task(file_data):
-                filename = file_data['filename']
-                content = file_data['content']
-                file_path = uploads_dir / filename
-                
-                with open(file_path, 'wb') as f:
-                    f.write(content)
-                    
-                file_bounding_boxes = {}
-                for field_name, boxes in result['bounding_boxes'].items():
-                    if isinstance(boxes, dict): boxes = [boxes]
-                    if isinstance(boxes, list):
-                        relevant_boxes = [b for b in boxes if isinstance(b, dict) and b.get('filename') == filename]
-                        if relevant_boxes: file_bounding_boxes[field_name] = relevant_boxes
-                
-                if file_bounding_boxes:
-                    try:
-                        annotated_path = annotate_document(
-                            file_path=file_path,
-                            bounding_boxes=file_bounding_boxes,
-                            output_dir=annotated_dir,
-                            filename_suffix="_annotated"
-                        )
-                        return {
-                            'original_filename': filename,
-                            'annotated_filename': annotated_path.name,
-                            'annotated_url': f"/static/annotated/{annotated_path.name}"
-                        }
-                    except Exception as e:
-                        logger.error(f"Failed to annotate {filename}: {e}")
-                return None
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=len(file_data_list)) as executor:
-                annotation_results = list(executor.map(annotation_task, file_data_list))
-                annotated_files = [res for res in annotation_results if res]
-        
-        # Add annotated file URLs to the result
-        if annotated_files:
-            result['annotated_files'] = annotated_files
         
         # Store in database
         try:
+            user_id = current_user.id if current_user else None
+            api_key_id = getattr(request.state, 'api_key_id', None)
+            
             session_id = v1_sessions.create_session(
                 application_type=application_type,
                 summary=result.copy(),  # Make a copy since create_session modifies it
-                files=file_data_list
+                files=file_data_list,
+                user_id=user_id,
+                api_key_id=api_key_id
             )
             result['session_id'] = session_id
             logger.info(f"Session created with ID: {session_id}")
@@ -228,55 +184,10 @@ async def submit_document(
         logger.info("Starting extraction...")
         result = extractor.extract(application_type, file_data_list)
         
-        # Annotate the PDF with bounding boxes if available
-        annotated_file_url = None
-        if result.get('bounding_boxes'):
-            logger.info("Annotating document with bounding boxes")
-            
-            # Create annotated directory
-            annotated_dir = Path(parent_dir) / "static" / "annotated"
-            annotated_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Filter bounding boxes for this specific file
-            file_bounding_boxes = {}
-            for field_name, boxes in result['bounding_boxes'].items():
-                # Handle both list and single dict for robustness
-                if isinstance(boxes, dict):
-                    boxes = [boxes]
-                
-                if isinstance(boxes, list):
-                    # Filter boxes that belong to this file
-                    relevant_boxes = [
-                        box for box in boxes 
-                        if isinstance(box, dict) and box.get('filename') == filename
-                    ]
-                    if relevant_boxes:
-                        file_bounding_boxes[field_name] = relevant_boxes
-            
-            if file_bounding_boxes:
-                try:
-                    annotated_path = annotate_document(
-                        file_path=file_path,
-                        bounding_boxes=file_bounding_boxes,
-                        output_dir=annotated_dir,
-                        filename_suffix="_annotated"
-                    )
-                    
-                    # Use annotated file URL instead of original
-                    annotated_filename = annotated_path.name
-                    annotated_file_url = f"/static/annotated/{annotated_filename}"
-                    logger.info(f"Annotated file saved: {annotated_filename} with {len(file_bounding_boxes)} boxes")
-                    
-                except Exception as annot_error:
-                    logger.error(f"Failed to annotate {filename}: {annot_error}", exc_info=True)
-                    # Fall back to original file if annotation fails
-            else:
-                logger.info(f"No bounding boxes found for {filename}, using original file")
-        
         # Determine file type for the template
         file_type = "pdf" if file.content_type == "application/pdf" else "image"
-        # Use annotated file if available, otherwise use original
-        file_url = annotated_file_url if annotated_file_url else f"/view-document/{filename}"
+        # Use the original document view endpoint
+        file_url = f"/view-document/{filename}"
         
         return templates.TemplateResponse(
             "results.html", 
@@ -539,6 +450,9 @@ async def extract_summary_custom(
         application_type = f"custom:{schema_id}"  # Special prefix for custom schemas
         from app.core.configurable_extractor import ConfigurableExtractor
         extractor = ConfigurableExtractor(user_id=user_id)
+        
+        result = extractor.extract(application_type, file_data_list)
+        
         # Generate natural language validation summary
         result['validation_summary'] = extractor.generate_validation_summary(result)
         logger.info(f"Validation summary generated: {result['validation_summary']}")

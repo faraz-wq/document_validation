@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import List, Optional
@@ -149,12 +150,15 @@ def get_user_session(
     bounding_boxes = {}
     if session.bounding_boxes:
         for bbox in session.bounding_boxes:
-            bounding_boxes[bbox.field_name] = {
+            if bbox.field_name not in bounding_boxes:
+                bounding_boxes[bbox.field_name] = []
+            
+            bounding_boxes[bbox.field_name].append({
                 'filename': bbox.filename,
                 'document_title': bbox.document_title,
                 'page': bbox.page,
                 'coordinates': bbox.coordinates
-            }
+            })
 
     # Build citations
     citations = {}
@@ -179,6 +183,51 @@ def get_user_session(
         source_documents=source_documents,
         errors=errors
     )
+@router.get("/{session_id}/documents/{filename}")
+def get_session_document(
+    session_id: str,
+    filename: str,
+    current_user: UserModel = Depends(get_current_user_from_jwt),
+    db: Session = Depends(get_db)
+):
+    """
+    Get a specific document from a session.
+    Only allows access to documents from sessions owned by the user.
+    """
+    # Verify session ownership
+    session = (
+        db.query(SessionModel)
+        .filter(SessionModel.session_id == session_id)
+        .first()
+    )
+
+    if session is None or session.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Find document record to get the safe path
+    doc_record = (
+        db.query(Document)
+        .filter(Document.session_id == session_id, Document.filename == filename)
+        .first()
+    )
+
+    if not doc_record:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Path to document (data/documents_v1/...)
+    documents_dir = Path("data/documents_v1")
+    file_path = documents_dir / doc_record.file_path
+
+    if not file_path.exists():
+        logger.error(f"File not found on disk: {file_path}")
+        raise HTTPException(status_code=404, detail="File not found on disk")
+
+    return FileResponse(
+        path=file_path,
+        media_type=doc_record.mime_type or "application/pdf",
+        filename=doc_record.filename
+    )
+
 
 
 def create_session(

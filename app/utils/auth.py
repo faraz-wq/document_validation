@@ -152,6 +152,23 @@ def get_user_from_api_key(
     )
 
 
+def get_optional_user(
+    request: Request,
+    x_api_key: Optional[str] = Header(None),
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """
+    FastAPI dependency: Optionally validate authentication via API key OR JWT token.
+    Returns the authenticated user or None if authentication fails.
+    """
+    try:
+        return get_user_from_api_key(request, x_api_key, token, db)
+    except HTTPException:
+        # If it was a 401, we just return None
+        return None
+
+
 def get_current_admin_user(
     user: User = Depends(get_user_from_api_key)
 ) -> User:
