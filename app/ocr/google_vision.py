@@ -36,7 +36,10 @@ def perform_ocr(content: bytes, mime_type: str = "application/pdf") -> List[Dict
     else:
         raise ValueError(f"Unsupported mime type for OCR: {mime_type}")
 
-    for page_num, image in enumerate(images, start=1):
+    import concurrent.futures
+
+    def process_page(page_args):
+        page_num, image = page_args
         width, height = image.size
         
         # Convert PIL image to bytes for Vision API
@@ -53,56 +56,55 @@ def perform_ocr(content: bytes, mime_type: str = "application/pdf") -> List[Dict
             raise Exception(f"Vision API Error: {response.error.message}")
             
         blocks = []
-        # Iterate through pages -> blocks -> paragraphs -> words -> symbols if needed
-        # The requirement says "Extract word-level or paragraph-level text with pixel bounding boxes"
-        # Let's go with paragraph level for blocks, or maybe symbols for higher precision?
-        # Usually blocks or paragraphs are good enough for field matching.
-        # Let's use the full text annotation structure.
-        
         full_text_annotation = response.full_text_annotation
         
         if full_text_annotation:
             for page in full_text_annotation.pages:
                 for block in page.blocks:
                     for paragraph in block.paragraphs:
-                        # Reconstruct paragraph text
                         para_text = ""
                         for word in paragraph.words:
                             word_text = "".join([symbol.text for symbol in word.symbols])
                             para_text += word_text + " "
                         
                         para_text = para_text.strip()
-                        
                         if not para_text:
                             continue
 
-                        # Get bounding box for the paragraph
-                        # Vertices are in order: top-left, top-right, bottom-right, bottom-left
                         vertices = paragraph.bounding_box.vertices
+                        x_coords = [v.x for v in vertices if hasattr(v, 'x')]
+                        y_coords = [v.y for v in vertices if hasattr(v, 'y')]
                         
-                        x_coords = [v.x for v in vertices]
-                        y_coords = [v.y for v in vertices]
-                        
-                        x_min = min(x_coords)
-                        x_max = max(x_coords)
-                        y_min = min(y_coords)
-                        y_max = max(y_coords)
+                        if not x_coords or not y_coords:
+                            continue
+                            
+                        x_min, x_max = min(x_coords), max(x_coords)
+                        y_min, y_max = min(y_coords), max(y_coords)
                         
                         blocks.append({
                             "text": para_text,
                             "bbox_px": [y_min, x_min, y_max, x_max]
                         })
 
-        pages_output.append({
+        return {
             "page": page_num,
             "image_width": width,
             "image_height": height,
             "blocks": blocks
-        })
+        }
+
+    # Process pages in parallel
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(images), 10)) as executor:
+        future_to_page = {executor.submit(process_page, (i, img)): i for i, img in enumerate(images, start=1)}
         
-        logger.info(f"Page {page_num}: Found {len(blocks)} text blocks")
-        # Log full text for observability
-        page_full_text = "\n".join([b['text'] for b in blocks])
-        logger.debug(f"Page {page_num} Content:\n{page_full_text}")
+        results = []
+        for future in concurrent.futures.as_completed(future_to_page):
+            results.append(future.result())
+            
+    # Sort by page number to maintain order
+    pages_output = sorted(results, key=lambda x: x['page'])
+    
+    for page in pages_output:
+        logger.info(f"Page {page['page']}: Found {len(page['blocks'])} text blocks")
         
     return pages_output

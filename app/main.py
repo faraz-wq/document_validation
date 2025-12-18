@@ -116,32 +116,23 @@ async def extract_summary(
             uploads_dir.mkdir(parents=True, exist_ok=True)
             annotated_dir.mkdir(parents=True, exist_ok=True)
             
-            for file_data in file_data_list:
+            import concurrent.futures
+
+            def annotation_task(file_data):
                 filename = file_data['filename']
                 content = file_data['content']
-                
-                # Save the original file temporarily
                 file_path = uploads_dir / filename
+                
                 with open(file_path, 'wb') as f:
                     f.write(content)
-                
-                # Filter bounding boxes for this specific file
+                    
                 file_bounding_boxes = {}
                 for field_name, boxes in result['bounding_boxes'].items():
-                    # Handle both list and single dict for robustness
-                    if isinstance(boxes, dict):
-                        boxes = [boxes]
-                    
+                    if isinstance(boxes, dict): boxes = [boxes]
                     if isinstance(boxes, list):
-                        # Filter boxes that belong to this file
-                        relevant_boxes = [
-                            box for box in boxes 
-                            if isinstance(box, dict) and box.get('filename') == filename
-                        ]
-                        if relevant_boxes:
-                            file_bounding_boxes[field_name] = relevant_boxes
+                        relevant_boxes = [b for b in boxes if isinstance(b, dict) and b.get('filename') == filename]
+                        if relevant_boxes: file_bounding_boxes[field_name] = relevant_boxes
                 
-                # Only annotate if there are bounding boxes for this file
                 if file_bounding_boxes:
                     try:
                         annotated_path = annotate_document(
@@ -150,23 +141,18 @@ async def extract_summary(
                             output_dir=annotated_dir,
                             filename_suffix="_annotated"
                         )
-                        
-                        # Create URL for the annotated file
-                        annotated_filename = annotated_path.name
-                        annotated_url = f"/static/annotated/{annotated_filename}"
-                        annotated_files.append({
+                        return {
                             'original_filename': filename,
-                            'annotated_filename': annotated_filename,
-                            'annotated_url': annotated_url
-                        })
-                        
-                        logger.info(f"Annotated file saved: {annotated_filename} with {len(file_bounding_boxes)} boxes")
-                        
-                    except Exception as annot_error:
-                        logger.error(f"Failed to annotate {filename}: {annot_error}", exc_info=True)
-                        # Continue processing even if annotation fails
-                else:
-                    logger.info(f"No bounding boxes found for {filename}, skipping annotation")
+                            'annotated_filename': annotated_path.name,
+                            'annotated_url': f"/static/annotated/{annotated_path.name}"
+                        }
+                    except Exception as e:
+                        logger.error(f"Failed to annotate {filename}: {e}")
+                return None
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(file_data_list)) as executor:
+                annotation_results = list(executor.map(annotation_task, file_data_list))
+                annotated_files = [res for res in annotation_results if res]
         
         # Add annotated file URLs to the result
         if annotated_files:

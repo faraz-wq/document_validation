@@ -132,10 +132,17 @@ class ConfigurableExtractor:
             Provide the exact text snippet from the document that was used to extract the value.
 
         ========================
+        VALIDATION SUMMARY
+        ========================
+        12. Populate the "validation_summary" field with a VERY SHORT (one sentence) natural language summary of what is missing or incorrect based on your analysis.
+        - If everything is present and correct, set it to null.
+        - Otherwise, be direct (e.g., "The Income Certificate and Applicant Photo represent missing mandatory fields.").
+
+        ========================
         FINAL VALIDATION
         ========================
-        12. Ensure "citations" contain EXACTLY the same field keys as extracted data.
-        13. Return the final JSON object ONLY.
+        13. Ensure "citations" contain EXACTLY the same field keys as extracted data.
+        14. Return the final JSON object ONLY.
         """
 
         logger.debug(f"Prompt created with length: {len(prompt)} characters")
@@ -161,34 +168,29 @@ class ConfigurableExtractor:
             logger.error(f"Failed to get schema for application type {app_type}: {str(e)}")
             raise ExtractionError(str(e))
 
-        # 1. Perform OCR on all files
-        ocr_results = [] # List of (filename, pages_output)
-        parts = []
-        
-        system_prompt = self._create_prompt(app_type, schema_class)
-        parts.append(system_prompt)
+        import concurrent.futures
 
-        for i, file_data in enumerate(files):
+        # 1. Perform OCR on all files in parallel
+        ocr_results = []
+        parts = [self._create_prompt(app_type, schema_class)]
+
+        def ocr_task(file_data):
             filename = file_data['filename']
             content = file_data['content']
-            mime_type = file_data.get('mime_type', 'application/pdf')
+            mime_type = file_data.get('mime_type')
             
-            # Basic mime type detection
             if not mime_type or mime_type == 'application/octet-stream':
                 ext = filename.split('.')[-1].lower()
-                if ext == 'pdf':
-                    mime_type = 'application/pdf'
-                elif ext in ['jpg', 'jpeg']:
-                    mime_type = 'image/jpeg'
-                elif ext == 'png':
-                    mime_type = 'image/png'
-                else:
-                    mime_type = mime_type or 'application/octet-stream'
+                mime_type = {
+                    'pdf': 'application/pdf',
+                    'jpg': 'image/jpeg',
+                    'jpeg': 'image/jpeg',
+                    'png': 'image/png'
+                }.get(ext, 'application/octet-stream')
 
-            logger.info(f"Performing OCR for file {i+1}: {filename}")
+            logger.info(f"Performing OCR for: {filename}")
             try:
                 pages_output = perform_ocr(content, mime_type)
-                ocr_results.append((filename, pages_output))
                 
                 # Construct text representation for Gemini
                 file_text = f"\n--- File: {filename} ---\n"
@@ -197,14 +199,19 @@ class ConfigurableExtractor:
                     page_text = "\n".join([block['text'] for block in page['blocks']])
                     file_text += f"Page {page_num}:\n{page_text}\n"
                 
-                parts.append(file_text)
-                
+                return filename, pages_output, file_text
             except Exception as e:
                 logger.error(f"OCR failed for {filename}: {e}")
                 raise ExtractionError(f"OCR failed for {filename}: {str(e)}")
 
-        logger.info(f"Sending request to Gemini API with {len(parts)} parts")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(files)) as executor:
+            task_results = list(executor.map(ocr_task, files))
 
+        for filename, pages_output, file_text in task_results:
+            ocr_results.append((filename, pages_output))
+            parts.append(file_text)
+
+        logger.info(f"Sending request to Gemini API with {len(parts)} parts")
         try:
             response = self.model.generate_content(
                 parts,
@@ -214,44 +221,28 @@ class ConfigurableExtractor:
                 }
             )
 
-            if response.candidates and response.candidates[0].finish_reason != FinishReason.STOP:
-                logger.warning(f"Gemini API response did not finish with STOP reason. Finish reason: {response.candidates[0].finish_reason}")
-
             json_str = response.text
-            
-            # Clean up markdown
-            if json_str.startswith("```json"):
-                json_str = json_str[7:]
-            if json_str.endswith("```"):
-                json_str = json_str[:-3]
+            if json_str.startswith("```json"): json_str = json_str[7:]
+            if json_str.endswith("```"): json_str = json_str[:-3]
 
             data = json.loads(json_str)
-            logger.info(f"Successfully parsed JSON response with {len(data)} top-level keys")
-
+            
             # Validate with Pydantic
             validated_data = schema_class(**data)
             result = validated_data.model_dump(by_alias=True)
             
-            # 2. Resolve Bounding Boxes using OCR results
+            # 2. Resolve Bounding Boxes
             logger.info("Resolving bounding boxes from OCR results")
-            bounding_boxes = self._resolve_bounding_boxes(result, ocr_results)
-            result['bounding_boxes'] = bounding_boxes
+            result['bounding_boxes'] = self._resolve_bounding_boxes(result, ocr_results)
             
-            # Extract token usage
-            token_usage = {}
             if hasattr(response, 'usage_metadata') and response.usage_metadata:
-                token_usage = {
+                result['_token_usage'] = {
                     'prompt_token_count': response.usage_metadata.prompt_token_count,
                     'candidates_token_count': response.usage_metadata.candidates_token_count,
                     'total_token_count': response.usage_metadata.total_token_count,
                 }
-            result['_token_usage'] = token_usage
             
             return result
-
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON response from Gemini: {str(e)}")
-            raise ExtractionError(f"Failed to parse JSON response from Gemini: {str(e)}")
         except Exception as e:
             logger.error(f"Gemini extraction failed: {str(e)}", exc_info=True)
             raise ExtractionError(f"Gemini extraction failed: {str(e)}")
