@@ -93,7 +93,7 @@ class IntegratedCertificateSummary(ApplicantCommon):
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
     source_documents: List[SourceDocument]
-    citations: Dict[str, str] = Field(
+    citations: Dict[str, Optional[str]] = Field(
         default_factory=dict,
         description="Map of field names to their source (filename and page number). Use dot notation for nested fields (e.g. 'applicant_name', 'income_details.total_gross_income')."
     )
@@ -106,6 +106,10 @@ class IntegratedCertificateSummary(ApplicantCommon):
         alias="_errors",
         description="List of extraction errors or missing fields."
     )
+    validation_summary: Optional[str] = Field(
+        default=None,
+        description="Natural language summary of extraction discrepancies."
+    )
 
 # --- 2. Income Certificate ---
 class IncomeCertificateSummary(ApplicantCommon):
@@ -116,7 +120,7 @@ class IncomeCertificateSummary(ApplicantCommon):
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
     source_documents: List[SourceDocument]
-    citations: Dict[str, str] = Field(
+    citations: Dict[str, Optional[str]] = Field(
         default_factory=dict,
         description="Map of field names to their source (filename and page number). Use dot notation for nested fields."
     )
@@ -128,6 +132,10 @@ class IncomeCertificateSummary(ApplicantCommon):
         default_factory=list,
         alias="_errors",
         description="List of extraction errors or missing fields."
+    )
+    validation_summary: Optional[str] = Field(
+        default=None,
+        description="Natural language summary of extraction discrepancies."
     )
 
 # --- 3. OBC Certificate ---
@@ -140,7 +148,7 @@ class OBCCertificateSummary(ApplicantCommon):
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
     source_documents: List[SourceDocument]
-    citations: Dict[str, str] = Field(
+    citations: Dict[str, Optional[str]] = Field(
         default_factory=dict,
         description="Map of field names to their source (filename and page number). Use dot notation for nested fields."
     )
@@ -152,6 +160,10 @@ class OBCCertificateSummary(ApplicantCommon):
         default_factory=list,
         alias="_errors",
         description="List of extraction errors or missing fields."
+    )
+    validation_summary: Optional[str] = Field(
+        default=None,
+        description="Natural language summary of extraction discrepancies."
     )
 
 # --- 4. EWS Income & Asset Certificate ---
@@ -164,7 +176,7 @@ class EWSCertificateSummary(ApplicantCommon):
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
     source_documents: List[SourceDocument]
-    citations: Dict[str, str] = Field(
+    citations: Dict[str, Optional[str]] = Field(
         default_factory=dict,
         description="Map of field names to their source (filename and page number). Use dot notation for nested fields."
     )
@@ -176,6 +188,10 @@ class EWSCertificateSummary(ApplicantCommon):
         default_factory=list,
         alias="_errors",
         description="List of extraction errors or missing fields."
+    )
+    validation_summary: Optional[str] = Field(
+        default=None,
+        description="Natural language summary of extraction discrepancies."
     )
 
 # --- 5. Family Member Certificate ---
@@ -187,7 +203,7 @@ class FamilyMemberCertificateSummary(ApplicantCommon):
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
     source_documents: List[SourceDocument]
-    citations: Dict[str, str] = Field(
+    citations: Dict[str, Optional[str]] = Field(
         default_factory=dict,
         description="Map of field names to their source (filename and page number). Use dot notation for nested fields."
     )
@@ -199,4 +215,8 @@ class FamilyMemberCertificateSummary(ApplicantCommon):
         default_factory=list,
         alias="_errors",
         description="List of extraction errors or missing fields."
+    )
+    validation_summary: Optional[str] = Field(
+        default=None,
+        description="Natural language summary of extraction discrepancies."
     )

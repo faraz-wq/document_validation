@@ -87,7 +87,9 @@ async def extract_summary(
     try:
         logger.info(f"Starting extraction for application type: {application_type}")
         result = extractor.extract(application_type, file_data_list)
-        logger.info(f"Extraction completed successfully for application type: {application_type}")
+        # Generate natural language validation summary
+        result['validation_summary'] = extractor.generate_validation_summary(result)
+        logger.info(f"Validation summary generated: {result['validation_summary']}")
 
         # Store the result in a file (for backward compatibility)
         output_dir = Path("extracted_results")
@@ -552,7 +554,9 @@ async def extract_summary_custom(
         application_type = f"custom:{schema_id}"  # Special prefix for custom schemas
         from app.core.configurable_extractor import ConfigurableExtractor
         extractor = ConfigurableExtractor(user_id=user_id)
-        result = extractor.extract(application_type, file_data_list)
+        # Generate natural language validation summary
+        result['validation_summary'] = extractor.generate_validation_summary(result)
+        logger.info(f"Validation summary generated: {result['validation_summary']}")
 
         # Store the result in a file (for backward compatibility)
         output_dir = Path("extracted_results")

@@ -27,7 +27,7 @@ class ExtractionError(Exception):
     pass
 
 class GeminiExtractor:
-    def __init__(self, model_name: str = "gemini-2.5-pro"):
+    def __init__(self, model_name: str = "gemini-2.5-flash"):
         self.model = GenerativeModel(model_name)
         logger.info(f"GeminiExtractor initialized with model: {model_name}")
 
@@ -92,7 +92,8 @@ class GeminiExtractor:
         - If optional and not found: use null.
         - If required and not found:
             - Infer ONLY if the inference is extremely safe and unambiguous.
-            - Otherwise set null and add an entry to a top-level "_errors" array explaining the missing field.
+            - Otherwise set null and add an entry to a top-level "_errors" array. 
+            - Each entry in "_errors" SHOULD be an object: {{"field": "field_name", "message": "explanation"}}
         6. For array fields:
         - Return an empty list [] if no items are found.
         - Each array element must be fully populated according to the schema.
@@ -244,6 +245,55 @@ class GeminiExtractor:
         except Exception as e:
             logger.error(f"Gemini extraction failed: {str(e)}", exc_info=True)
             raise ExtractionError(f"Gemini extraction failed: {str(e)}")
+
+    def generate_validation_summary(self, result: Dict[str, Any]) -> str:
+        """
+        Generates a very short natural language summary of missing and mismatched fields.
+        """
+        logger.info("Generating validation summary")
+        errors = result.get('_errors', [])
+        
+        # Find fields that are null or empty in the extraction summary
+        missing_fields = []
+        def find_missing(obj, path=""):
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    if k in ['bounding_boxes', 'citations', 'source_documents', '_errors', '_token_usage']:
+                        continue
+                    new_path = f"{path}.{k}" if path else k
+                    find_missing(v, new_path)
+            elif obj is None or obj == "" or (isinstance(obj, list) and len(obj) == 0):
+                missing_fields.append(path)
+        
+        find_missing(result)
+        
+        if not errors and not missing_fields:
+            return None
+
+        prompt = f"""
+        Based on the following document extraction issues, provide a VERY SHORT (one sentence) summary of what is missing or incorrect.
+        Only talk about the missing or mismatched fields. Be direct.
+
+        Mismatches/Errors: {json.dumps(errors)}
+        Missing Fields: {", ".join(missing_fields)}
+        
+        Summary:
+        """
+
+        try:
+            response = self.model.generate_content(
+                prompt,
+                generation_config={
+                    "temperature": 0.0,
+                    "max_output_tokens": 150,
+                }
+            )
+            summary = response.text.strip()
+            logger.info(f"Generated validation summary: {summary}")
+            return summary
+        except Exception as e:
+            logger.error(f"Failed to generate validation summary: {e}")
+            return "Discrepancies found in extraction. Please review the flagged fields."
 
     def _resolve_bounding_boxes(self, data: Dict[str, Any], ocr_results: List[Tuple[str, List[Dict[str, Any]]]]) -> Dict[str, List[Dict[str, Any]]]:
         """
