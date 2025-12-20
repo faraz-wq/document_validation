@@ -1,0 +1,251 @@
+{
+  "applicant_name": "Mandla venkatesh",
+  "fathers_name": "Mandla chalapati",
+  "address": "Plot No 2276 Tarakarama Nagar Karakambadi Karakambadi ( Rural ) Chittoor Andhra Pradesh - 517520",
+  "gender": "male",
+  "age_dob": "12/10/1975",
+  "phone_number": "630165945",
+  "ration_card_number": "2822160181",
+  "community": "boya",
+  "nativity": null,
+  "family_income": null,
+  "key_details": "B.CA",
+  "issuer_authority": "తహసిల్దార్ కార్యాలయం : రేణిగుంట",
+  "date_of_issue": null,
+  "source_documents": [
+    {
+      "document_title": "Application Form",
+      "filename": "m venkatesh cast aplication.pdf",
+      "page_numbers": [
+        1
+      ]
+    },
+    {
+      "document_title": "Aadhaar Card",
+      "filename": "m venkatesh cast aplication.pdf",
+      "page_numbers": [
+        2
+      ]
+    },
+    {
+      "document_title": "Rice Card",
+      "filename": "m venkatesh cast aplication.pdf",
+      "page_numbers": [
+        3
+      ]
+    },
+    {
+      "document_title": "Study and Conduct Certificate",
+      "filename": "m venkatesh cast aplication.pdf",
+      "page_numbers": [
+        4
+      ]
+    }
+  ],
+  "citations": {
+    "applicant_name": "m venkatesh cast aplication.pdf (Page 1) - Mandla venkatesh",
+    "fathers_name": "m venkatesh cast aplication.pdf (Page 1) - Mandla chalapati",
+    "address": "m venkatesh cast aplication.pdf (Page 2) - Plot No 2276 Tarakarama Nagar Karakambadi Karakambadi ( Rural ) Chittoor Andhra Pradesh - 517520",
+    "gender": "m venkatesh cast aplication.pdf (Page 1) - male",
+    "age_dob": "m venkatesh cast aplication.pdf (Page 1) - 12 / 10 / 1975",
+    "phone_number": "m venkatesh cast aplication.pdf (Page 1) - 630165945",
+    "ration_card_number": "m venkatesh cast aplication.pdf (Page 1) - 2822160181",
+    "community": "m venkatesh cast aplication.pdf (Page 1) - boya",
+    "key_details": "m venkatesh cast aplication.pdf (Page 1) - B.CA",
+    "issuer_authority": "m venkatesh cast aplication.pdf (Page 3) - తహసిల్దార్ కార్యాలయం : రేణిగుంట"
+  },
+  "bounding_boxes": {
+    "applicant_name": [
+      {
+        "filename": "m venkatesh cast aplication.pdf",
+        "document_title": "Application Form",
+        "page": 1,
+        "coordinates": [
+          200.6060606060606,
+          349.80392156862746,
+          246.36363636363637,
+          651.7647058823529
+        ]
+      },
+      {
+        "filename": "m venkatesh cast aplication.pdf",
+        "document_title": "Aadhaar Card",
+        "page": 2,
+        "coordinates": [
+          643.6363636363636,
+          227.84313725490196,
+          650.6060606060606,
+          313.72549019607845
+        ]
+      }
+    ],
+    "fathers_name": [
+      {
+        "filename": "m venkatesh cast aplication.pdf",
+        "document_title": "Application Form",
+        "page": 1,
+        "coordinates": [
+          278.4848484848485,
+          376.07843137254906,
+          306.060606060606,
+          634.1176470588235
+        ]
+      }
+    ],
+    "gender": [
+      {
+        "filename": "m venkatesh cast aplication.pdf",
+        "document_title": "Application Form",
+        "page": 1,
+        "coordinates": [
+          309.09090909090907,
+          296.8627450980392,
+          324.24242424242425,
+          361.5686274509804
+        ]
+      },
+      {
+        "filename": "m venkatesh cast aplication.pdf",
+        "document_title": "Aadhaar Card",
+        "page": 2,
+        "coordinates": [
+          651.5151515151515,
+          227.45098039215685,
+          672.7272727272727,
+          351.37254901960785
+        ]
+      },
+      {
+        "filename": "m venkatesh cast aplication.pdf",
+        "document_title": "Rice Card",
+        "page": 3,
+        "coordinates": [
+          189.3939393939394,
+          221.9607843137255,
+          197.87878787878788,
+          291.7647058823529
+        ]
+      }
+    ],
+    "age_dob": [
+      {
+        "filename": "m venkatesh cast aplication.pdf",
+        "document_title": "Aadhaar Card",
+        "page": 2,
+        "coordinates": [
+          651.5151515151515,
+          227.45098039215685,
+          672.7272727272727,
+          351.37254901960785
+        ]
+      }
+    ],
+    "phone_number": [
+      {
+        "filename": "m venkatesh cast aplication.pdf",
+        "document_title": "Application Form",
+        "page": 1,
+        "coordinates": [
+          443.33333333333337,
+          158.03921568627453,
+          468.1818181818182,
+          552.156862745098
+        ]
+      }
+    ],
+    "ration_card_number": [
+      {
+        "filename": "m venkatesh cast aplication.pdf",
+        "document_title": "Application Form",
+        "page": 1,
+        "coordinates": [
+          439.3939393939394,
+          589.0196078431372,
+          462.7272727272727,
+          765.4901960784314
+        ]
+      },
+      {
+        "filename": "m venkatesh cast aplication.pdf",
+        "document_title": "Rice Card",
+        "page": 3,
+        "coordinates": [
+          142.72727272727272,
+          224.31372549019608,
+          157.57575757575756,
+          338.0392156862745
+        ]
+      }
+    ],
+    "community": [
+      {
+        "filename": "m venkatesh cast aplication.pdf",
+        "document_title": "Application Form",
+        "page": 1,
+        "coordinates": [
+          572.7272727272727,
+          392.156862745098,
+          633.3333333333333,
+          542.7450980392157
+        ]
+      },
+      {
+        "filename": "m venkatesh cast aplication.pdf",
+        "document_title": "Study and Conduct Certificate",
+        "page": 4,
+        "coordinates": [
+          304.54545454545456,
+          769.8039215686274,
+          335.75757575757575,
+          842.7450980392157
+        ]
+      }
+    ],
+    "key_details": [
+      {
+        "filename": "m venkatesh cast aplication.pdf",
+        "document_title": "Application Form",
+        "page": 1,
+        "coordinates": [
+          573.6363636363636,
+          701.1764705882352,
+          588.4848484848485,
+          768.6274509803922
+        ]
+      }
+    ],
+    "issuer_authority": [
+      {
+        "filename": "m venkatesh cast aplication.pdf",
+        "document_title": "Rice Card",
+        "page": 3,
+        "coordinates": [
+          207.27272727272728,
+          643.1372549019609,
+          222.4242424242424,
+          800.0
+        ]
+      }
+    ]
+  },
+  "_errors": [
+    {
+      "field": "nativity",
+      "message": "Nativity not found in the document."
+    },
+    {
+      "field": "family_income",
+      "message": "Family Income not found in the document."
+    },
+    {
+      "field": "date_of_issue",
+      "message": "Date of issue for the Integrated Certificate not found as this is an application."
+    }
+  ],
+  "validation_summary": "Nativity, family income, and the integrated certificate's date of issue are missing. Phone number and address show inconsistencies across documents.",
+  "_token_usage": {
+    "prompt_token_count": 4067,
+    "candidates_token_count": 904,
+    "total_token_count": 7567
+  }
+}

@@ -175,3 +175,41 @@ class Citation(Base):
 
     # Relationships
     session = relationship("Session", back_populates="citations")
+
+
+# ==============================================================================
+# Validation Sessions (Form Validation Feature)
+# ==============================================================================
+
+class ValidationSession(Base):
+    """Validation sessions for form validation workflow"""
+    __tablename__ = "validation_sessions"
+
+    validation_id = Column(String(36), primary_key=True)  # UUID
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    api_key_id = Column(Integer, ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=True, index=True)
+    
+    # Link to extraction session if validation was done on extracted data
+    extraction_session_id = Column(String(36), ForeignKey("sessions.session_id", ondelete="SET NULL"), nullable=True, index=True)
+    
+    # Application details
+    application_type = Column(String(100), nullable=False, index=True)
+    
+    # Validation results
+    validation_report_json = Column(JSON, nullable=False)  # Complete ValidationReport
+    extraction_summary_json = Column(JSON, nullable=False)  # The data that was validated
+    
+    # Validation metadata
+    auto_approved = Column(Boolean, nullable=False, index=True)
+    confidence_score = Column(Float, nullable=False)
+    error_count = Column(Integer, default=0, nullable=False)
+    warning_count = Column(Integer, default=0, nullable=False)
+    info_count = Column(Integer, default=0, nullable=False)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    
+    # Relationships
+    user = relationship("User")
+    api_key = relationship("ApiKey")
+    extraction_session = relationship("Session")

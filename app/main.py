@@ -26,6 +26,7 @@ from app.models import (
 from app.schemas.schema_models import SchemaDefinition
 from app.core.configurable_extractor import ConfigurableExtractor
 from app.utils.auth import get_user_from_api_key, get_optional_user
+from app.utils.pdf_utils import combine_pdf_and_non_pdf_files
 from app.db.models import User
 
 # Setup for UI
@@ -85,12 +86,21 @@ async def extract_summary(
             "mime_type": file.content_type
         })
 
+    # Combine multiple PDFs into a single PDF before processing
+    original_file_count = len(file_data_list)
+    file_data_list = combine_pdf_and_non_pdf_files(file_data_list)
+
+    if len(file_data_list) < original_file_count:
+        logger.info(f"Combined {original_file_count} files into {len(file_data_list)} files (PDFs merged)")
+    else:
+        logger.info(f"No PDF combination performed - {len(file_data_list)} files remain unchanged")
+
     try:
         logger.info(f"Starting extraction for application type: {application_type}")
         result = extractor.extract(application_type, file_data_list)
-        # Generate natural language validation summary
-        result['validation_summary'] = extractor.generate_validation_summary(result)
-        logger.info(f"Validation summary generated: {result['validation_summary']}")
+        # Set initial verification status
+        result['validation_summary'] = "Extraction complete. Ready for verification."
+        logger.info("Extraction complete")
 
         # Store the result in a file (for backward compatibility)
         output_dir = Path("extracted_results")
@@ -105,8 +115,6 @@ async def extract_summary(
             json.dump(result, f, indent=2, ensure_ascii=False)
 
         logger.info(f"Results stored in: {output_file_path}")
-        
-
         
         # Store in database
         try:
@@ -324,6 +332,8 @@ from app.api.v1 import me_api_keys as v1_me_api_keys
 from app.api.v1 import me_stats as v1_me_stats
 from app.api.v1 import me_logs as v1_me_logs
 from app.api.v1 import me_schemas as v1_me_schemas
+from app import validation_endpoint
+from app.api import validation_sessions
 
 app.include_router(v1_auth.router, prefix="", tags=["v1-auth"])
 app.include_router(v1_sessions.router, prefix="/v1", tags=["v1-sessions"])
@@ -331,6 +341,8 @@ app.include_router(v1_me_api_keys.router, prefix="/v1", tags=["v1-me-api-keys"])
 app.include_router(v1_me_stats.router, prefix="/v1", tags=["v1-me-stats"])
 app.include_router(v1_me_logs.router, prefix="/v1", tags=["v1-me-logs"])
 app.include_router(v1_me_schemas.router, tags=["v1-me-schemas"])
+app.include_router(validation_endpoint.router, tags=["validation"])
+app.include_router(validation_sessions.router, prefix="/v1", tags=["validation-sessions"])
 
 # New v1 endpoints for configurable schemas
 @app.post("/v1/schemas")
@@ -444,6 +456,15 @@ async def extract_summary_custom(
             "content": content,
             "mime_type": file.content_type
         })
+
+    # Combine multiple PDFs into a single PDF before processing
+    original_file_count = len(file_data_list)
+    file_data_list = combine_pdf_and_non_pdf_files(file_data_list)
+
+    if len(file_data_list) < original_file_count:
+        logger.info(f"Combined {original_file_count} files into {len(file_data_list)} files (PDFs merged)")
+    else:
+        logger.info(f"No PDF combination performed - {len(file_data_list)} files remain unchanged")
 
     try:
         # Use the custom schema for extraction
