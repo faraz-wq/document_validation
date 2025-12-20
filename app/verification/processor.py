@@ -31,42 +31,55 @@ class VerificationProcessor:
     def process(self, app_type: str, files: List[Dict[str, Any]], config: VerificationConfig) -> Dict[str, Any]:
         logger.info(f"Starting agnostic extraction for: {app_type}")
         
-        # 1. OCR & Indexed Text Preparation
+        from concurrent.futures import ThreadPoolExecutor
+        
+        # 1. Parallel OCR Phase
         all_blocks_indexed = {}
-        block_counter = 0
         file_texts = []
         
-        for file_data in files:
+        def ocr_and_index(file_idx, file_data):
             filename = file_data['filename']
             content = file_data['content']
             mime_type = file_data.get('mime_type', 'application/pdf')
             
-            pages_output = perform_ocr(content, mime_type)
-            save_record("ocr", {"filename": filename, "ocr_data": pages_output}, f"ocr_{filename}")
-            
-            file_text = f"\n--- File: {filename} ---\n"
-            for page in pages_output:
-                pnum = page['page']
-                file_text += f"Page {pnum}:\n"
-                for block in page['blocks']:
-                    bid = f"B{block_counter}"
-                    file_text += f"[{bid}] {block['text']}\n"
-                    all_blocks_indexed[bid] = {
-                        **block,
-                        'page': pnum,
-                        'filename': filename,
-                        'width': page['image_width'],
-                        'height': page['image_height']
-                    }
-                    block_counter += 1
-            file_texts.append(file_text)
+            try:
+                pages_output = perform_ocr(content, mime_type)
+                save_record("ocr", {"filename": filename, "ocr_data": pages_output}, f"ocr_{filename}")
+                
+                txt = f"\n### FILE {file_idx}: {filename} ###\n"
+                local_blocks = {}
+                for p_idx, page in enumerate(pages_output, start=1):
+                    pnum = page['page']
+                    txt += f"\n[PAGE {pnum}]\n"
+                    for b_idx, block in enumerate(page['blocks']):
+                        # Structured key: F{file}_P{page}_B{block}
+                        bid = f"F{file_idx}P{pnum}B{b_idx}"
+                        txt += f"[{bid}] {block['text']}\n"
+                        local_blocks[bid] = {
+                            **block,
+                            'page': pnum,
+                            'filename': filename,
+                            'width': page['image_width'],
+                            'height': page['image_height']
+                        }
+                return txt, local_blocks
+            except Exception as e:
+                logger.error(f"OCR failed for {filename}: {e}")
+                return f"\n[ERROR OCRing {filename}]\n", {}
+
+        with ThreadPoolExecutor(max_workers=min(len(files), 5)) as executor:
+            futures = [executor.submit(ocr_and_index, i, f) for i, f in enumerate(files, start=1)]
+            for f in futures:
+                txt, blocks = f.result()
+                file_texts.append(txt)
+                all_blocks_indexed.update(blocks)
 
         # 2. Build Dynamic Prompt
         prompt = self._build_prompt(config)
         parts = [prompt] + file_texts
         
         # 3. AI Intelligence Phase
-        logger.info(f"Sending request to Gemini with {len(config.key_details)} targets")
+        logger.info(f"Sending request to Gemini with structured context")
         response = self.model.generate_content(
             parts,
             generation_config={"response_mime_type": "application/json", "temperature": 0.0}
@@ -75,7 +88,6 @@ class VerificationProcessor:
         raw_text = response.text
         save_record("gemini_raw", {"response": raw_text, "app_type": app_type}, f"raw_{app_type}")
         
-        # Parse JSON safely
         try:
             if raw_text.startswith("```json"): raw_text = raw_text[7:]
             if raw_text.endswith("```"): raw_text = raw_text[:-3]
@@ -84,22 +96,17 @@ class VerificationProcessor:
             logger.error(f"Failed to parse Gemini JSON: {e}")
             raise ValueError(f"AI returned invalid JSON: {str(e)}")
 
-        # 4. Post-Process: Resolve Bounding Boxes & Citations
+        # 4. Post-Process
         block_mapping = data.pop('_block_ids_mapping', {})
         source_docs = data.get('source_documents', [])
         
-        # 5. Coordinate Resolution & Date Normalization
+        # 5. Coordinate Resolution & Normalization
         result = data.copy()
         result['bounding_boxes'] = self._resolve_boxes(data, all_blocks_indexed, block_mapping, source_docs)
-        
-        # Apply Date Normalization
         self._normalize_dates(result)
         
-        # Add basic metadata
         if hasattr(response, 'usage_metadata'):
-            result['_token_usage'] = {
-                'total_token_count': response.usage_metadata.total_token_count
-            }
+            result['_token_usage'] = {'total_token_count': response.usage_metadata.total_token_count}
         
         save_record("extraction_final", result, f"final_{app_type}")
         return result
@@ -158,8 +165,8 @@ class VerificationProcessor:
         1. Every page must be classified in 'source_documents' array with filename, document_title, and page_numbers.
         2. ENTITY IDENTIFICATION: In 'document_title', specify the owner if applicable (e.g., "Aadhaar Card - [Name]").
         3. Identify EXACT text segments for each field.
-        4. SPATIAL PRECISION: For each field, provide the semantic block IDs (e.g., ["B12", "B13"]) in a separate object called '_block_ids_mapping'. 
-           ONLY include blocks that directly contain the value. Do not include headers.
+        4. SPATIAL PRECISION: For each field, provide the structured block IDs (e.g., ["F1P3B12", "F1P3B13"]) in a separate object called '_block_ids_mapping'. 
+           ONLY include blocks that directly contain the value. The IDs MUST match the text markers exactly.
         5. If a field is not found, set its value to null. DO NOT guess.
         6. Provide citations for every field in a 'citations' object matching the field paths.
         7. Note any inconsistencies (e.g. name mismatch between documents) in an '_errors' array.
@@ -169,7 +176,7 @@ class VerificationProcessor:
         - All extracted fields
         - 'source_documents': [{{ "filename": "...", "document_title": "...", "page_numbers": [...] }}]
         - 'citations': {{ "field_path": "Filename (Page X) - <Text>", ... }}
-        - '_block_ids_mapping': {{ "field_path": ["B#", "B#"], ... }}
+        - '_block_ids_mapping': {{ "field_path": ["F#P#B#", "F#P#B#"], ... }}
         - '_errors': [{{ "field": "...", "message": "..." }}]
         """
 

@@ -119,6 +119,10 @@ async def validate_form(
             confidence_score=1.0 if new_report.overall_status == "verified" else 0.7,
             issues=report_issues,
             summary=f"Audit Status: {new_report.overall_status}",
+            extraction_summary=new_report.extraction_summary,
+            bounding_boxes=new_report.bounding_boxes,
+            citations=new_report.citations,
+            source_documents=new_report.source_documents,
             metadata=new_report.metadata
         )
         
@@ -245,6 +249,10 @@ async def validate_form_json(request: ValidationRequest) -> ValidationReport:
             confidence_score=1.0 if new_report.overall_status == "verified" else 0.7,
             issues=report_issues,
             summary=f"Audit Status: {new_report.overall_status}",
+            extraction_summary=new_report.extraction_summary,
+            bounding_boxes=new_report.bounding_boxes,
+            citations=new_report.citations,
+            source_documents=new_report.source_documents,
             metadata=new_report.metadata
         )
         

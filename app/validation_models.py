@@ -33,6 +33,13 @@ class ValidationReport(BaseModel):
     confidence_score: float = Field(description="Confidence score from 0.0 to 1.0")
     issues: List[ValidationIssue] = Field(default_factory=list, description="List of all validation issues found")
     summary: Optional[str] = Field(default=None, description="Natural language summary of validation results")
+    
+    # NEW: Include full extraction results for frontend transparency
+    extraction_summary: Optional[Dict[str, Any]] = None
+    bounding_boxes: Optional[Dict[str, Any]] = None
+    citations: Optional[Dict[str, Any]] = None
+    source_documents: Optional[List[Dict[str, Any]]] = None
+    
     metadata: Dict[str, Any] = Field(
         default_factory=dict,
         description="Additional metadata about the validation (e.g., rule set used, validation timestamp)"

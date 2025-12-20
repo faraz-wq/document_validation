@@ -46,6 +46,10 @@ class VerificationEngine:
             timestamp=datetime.now().isoformat(),
             overall_status=status,
             issues=issues,
+            extraction_summary=extraction_summary,
+            bounding_boxes=extraction_summary.get("bounding_boxes", {}),
+            citations=extraction_summary.get("citations", {}),
+            source_documents=extraction_summary.get("source_documents", []),
             metadata={
                 "total_issues": len(issues),
                 "error_count": error_count

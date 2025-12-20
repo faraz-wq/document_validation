@@ -44,4 +44,11 @@ class VerificationReport(BaseModel):
     timestamp: str
     overall_status: str # "verified", "flagged", "failed"
     issues: List[VerificationIssue]
+    
+    # NEW: Include full extraction results for frontend transparency
+    extraction_summary: Dict[str, Any] = {}
+    bounding_boxes: Dict[str, Any] = {}
+    citations: Dict[str, Any] = {}
+    source_documents: List[Dict[str, Any]] = []
+    
     metadata: Dict[str, Any] = {}
