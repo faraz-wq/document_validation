@@ -35,11 +35,41 @@ class VerificationEngine:
             rule_issues = self._verify_rule(extraction_summary, rule)
             issues.extend(rule_issues)
             
-        # Determine overall status
-        error_count = len([i for i in issues if i.severity == "error" and not i.passed])
+        # Determine overall status and dynamic confidence score
+        total_checks = len(issues)
+        failed_checks = [i for i in issues if not i.passed]
+        passed_checks_count = total_checks - len(failed_checks)
+        
+        # Heuristic: Critical errors (severity=error) have more weight
+        error_count = len([i for i in failed_checks if i.severity == "error"])
+        warning_count = len([i for i in failed_checks if i.severity == "warning"])
+        
+        # Confidence score calculation
+        if total_checks > 0:
+            # Base score is percentage of passed checks
+            base_score = passed_checks_count / total_checks
+            # Subtract penalty for unresolved errors
+            confidence_score = max(0.1, base_score - (error_count * 0.1))
+        else:
+            confidence_score = 1.0
+
         status = "verified" if error_count == 0 else "flagged"
         if error_count > 3: status = "failed"
         
+        # Generate a descriptive summary
+        if status == "verified":
+            summary = "All mandatory fields and business rules verified successfully."
+        else:
+            summary = f"Audit flagged {error_count} errors and {warning_count} warnings. "
+            if error_count > 0:
+                top_errors = [i.message for i in failed_checks if i.severity == "error"][:2]
+                summary += f"Primary issues: {'; '.join(top_errors)}."
+
+        # Confidence reason for transparency
+        confidence_reason = f"Base score {base_score:.0%} based on {passed_checks_count}/{total_checks} passed individual checks."
+        if error_count > 0:
+            confidence_reason += f" Reduced by {error_count * 10}% due to {error_count} unresolved critical errors."
+
         return VerificationReport(
             application_type=config.application_type,
             report_id=f"VR_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
@@ -50,9 +80,16 @@ class VerificationEngine:
             bounding_boxes=extraction_summary.get("bounding_boxes", {}),
             citations=extraction_summary.get("citations", {}),
             source_documents=extraction_summary.get("source_documents", []),
+            confidence_score=round(confidence_score, 2),
+            summary=summary,
+            confidence_reason=confidence_reason,
             metadata={
                 "total_issues": len(issues),
-                "error_count": error_count
+                "passed_count": passed_checks_count,
+                "error_count": error_count,
+                "warning_count": warning_count,
+                "confidence_score": round(confidence_score, 2),
+                "confidence_reason": confidence_reason
             }
         )
 

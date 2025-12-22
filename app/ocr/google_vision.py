@@ -83,7 +83,18 @@ def perform_ocr(content: bytes, mime_type: str = "application/pdf") -> List[Dict
                         
                         blocks.append({
                             "text": para_text,
-                            "bbox_px": [y_min, x_min, y_max, x_max]
+                            "bbox_px": [y_min, x_min, y_max, x_max],
+                            "words": [
+                                {
+                                    "text": "".join([s.text for s in w.symbols]),
+                                    "bbox_px": [
+                                        min([v.y for v in w.bounding_box.vertices if hasattr(v, 'y')]),
+                                        min([v.x for v in w.bounding_box.vertices if hasattr(v, 'x')]),
+                                        max([v.y for v in w.bounding_box.vertices if hasattr(v, 'y')]),
+                                        max([v.x for v in w.bounding_box.vertices if hasattr(v, 'x')])
+                                    ]
+                                } for w in paragraph.words
+                            ]
                         })
 
         return {

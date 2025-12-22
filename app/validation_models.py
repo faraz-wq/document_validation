@@ -29,8 +29,10 @@ class ValidationRequest(BaseModel):
 
 class ValidationReport(BaseModel):
     """Complete validation report for a submitted application."""
+    application_type: Optional[str] = None
     auto_approved: bool = Field(description="Whether the application can be auto-approved")
     confidence_score: float = Field(description="Confidence score from 0.0 to 1.0")
+    confidence_reason: Optional[str] = None
     issues: List[ValidationIssue] = Field(default_factory=list, description="List of all validation issues found")
     summary: Optional[str] = Field(default=None, description="Natural language summary of validation results")
     

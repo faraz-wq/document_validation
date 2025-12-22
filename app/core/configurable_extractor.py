@@ -265,6 +265,7 @@ class ConfigurableExtractor:
                     all_blocks.append({
                         'text': block['text'],
                         'bbox_px': block['bbox_px'],
+                        'words': block.get('words', []),
                         'page': page_num,
                         'filename': filename,
                         'width': width,
@@ -280,16 +281,58 @@ class ConfigurableExtractor:
             matches = []
             value_norm = value.lower().strip()
             
-            # Skip very short values to avoid noise, unless it's likely a code or specific symbol
+            # Skip very short values to avoid noise
             if len(value_norm) < 2:
-                pass
+                return []
 
             for block in all_blocks:
                 block_text_norm = block['text'].lower()
                 
                 # Check for substring match
                 if value_norm in block_text_norm:
-                    matches.append(block)
+                    # Try to refine to word-level if possible
+                    words = block.get('words', [])
+                    if words:
+                        # Find all occurrences in this block
+                        start_pos = 0
+                        while True:
+                            idx = block_text_norm.find(value_norm, start_pos)
+                            if idx == -1: break
+                            
+                            end_idx = idx + len(value_norm)
+                            
+                            # Find words that overlap with [idx, end_idx]
+                            current_offset = 0
+                            matching_coords = []
+                            for w in words:
+                                w_len = len(w['text'])
+                                w_start = current_offset
+                                w_end = current_offset + w_len
+                                
+                                if not (w_end <= idx or w_start >= end_idx):
+                                    matching_coords.append(w['bbox_px'])
+                                
+                                current_offset += w_len + 1 # +1 for space joining
+                            
+                            if matching_coords:
+                                y_min = min(c[0] for c in matching_coords)
+                                x_min = min(c[1] for c in matching_coords)
+                                y_max = max(c[2] for c in matching_coords)
+                                x_max = max(c[3] for c in matching_coords)
+                                
+                                # Create a refined "block" for this occurrence
+                                match_occurrence = block.copy()
+                                match_occurrence['bbox_px'] = [y_min, x_min, y_max, x_max]
+                                matches.append(match_occurrence)
+                            else:
+                                # Fallback to full block if word matching fails for some reason
+                                if block not in matches:
+                                    matches.append(block)
+                            
+                            start_pos = idx + 1 # Search for next occurrence
+                    else:
+                        # No word data, use the whole block
+                        matches.append(block)
             
             return matches
 
@@ -351,8 +394,53 @@ class ConfigurableExtractor:
                 else:
                     logger.warning(f"Field '{path}': No OCR match found for value '{val_str}'")
 
-        traverse(data)
-        return bounding_boxes
+    def generate_validation_summary(self, result: Dict[str, Any]) -> str:
+        """
+        Generates a very short natural language summary of missing and mismatched fields.
+        """
+        logger.info("Generating validation summary")
+        errors = result.get('_errors', [])
+        
+        # Find fields that are null or empty in the extraction summary
+        missing_fields = []
+        def find_missing(obj, path=""):
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    if k in ['bounding_boxes', 'citations', 'source_documents', '_errors', '_token_usage']:
+                        continue
+                    new_path = f"{path}.{k}" if path else k
+                    find_missing(v, new_path)
+            elif obj is None or obj == "" or (isinstance(obj, list) and len(obj) == 0):
+                missing_fields.append(path)
+        
+        find_missing(result)
+        
+        if result.get('validation_summary'):
+            return result['validation_summary']
+
+        if not errors and not missing_fields:
+            return None
+
+        prompt = f"""
+        Provide a VERY SHORT (one sentence) summary of these issues:
+        Errors: {json.dumps(errors)}
+        Missing: {", ".join(missing_fields)}
+        """
+
+        try:
+            response = self.model.generate_content(
+                prompt,
+                generation_config={
+                    "temperature": 0.0,
+                    "max_output_tokens": 150,
+                }
+            )
+            summary = response.text.strip()
+            logger.info(f"Generated validation summary: {summary}")
+            return summary
+        except Exception as e:
+            logger.error(f"Failed to generate validation summary: {e}")
+            return "Discrepancies found in extraction. Please review the flagged fields."
 
 # Helper to load file content (for testing/CLI)
 def load_file(filepath: str) -> Dict[str, Any]:

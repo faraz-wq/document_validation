@@ -43,6 +43,9 @@ class VerificationReport(BaseModel):
     report_id: str
     timestamp: str
     overall_status: str # "verified", "flagged", "failed"
+    confidence_score: float = 0.0
+    summary: Optional[str] = None
+    confidence_reason: Optional[str] = None
     issues: List[VerificationIssue]
     
     # NEW: Include full extraction results for frontend transparency

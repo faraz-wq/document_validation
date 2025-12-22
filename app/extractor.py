@@ -303,6 +303,7 @@ class GeminiExtractor:
                     all_blocks.append({
                         'text': block['text'],
                         'bbox_px': block['bbox_px'],
+                        'words': block.get('words', []),
                         'page': page_num,
                         'filename': filename,
                         'width': width,
@@ -318,19 +319,58 @@ class GeminiExtractor:
             matches = []
             value_norm = value.lower().strip()
             
-            # Skip very short values to avoid noise, unless it's likely a code or specific symbol
+            # Skip very short values to avoid noise
             if len(value_norm) < 2:
-                # You might want to allow single chars if they are exact matches, but for now let's be safe
-                # Or just proceed. Let's proceed but rely on exact word boundary checks if possible?
-                # For now, just simple substring match as requested.
-                pass
+                return []
 
             for block in all_blocks:
                 block_text_norm = block['text'].lower()
                 
                 # Check for substring match
                 if value_norm in block_text_norm:
-                    matches.append(block)
+                    # Try to refine to word-level if possible
+                    words = block.get('words', [])
+                    if words:
+                        # Find all occurrences in this block
+                        start_pos = 0
+                        while True:
+                            idx = block_text_norm.find(value_norm, start_pos)
+                            if idx == -1: break
+                            
+                            end_idx = idx + len(value_norm)
+                            
+                            # Find words that overlap with [idx, end_idx]
+                            current_offset = 0
+                            matching_coords = []
+                            for w in words:
+                                w_len = len(w['text'])
+                                w_start = current_offset
+                                w_end = current_offset + w_len
+                                
+                                if not (w_end <= idx or w_start >= end_idx):
+                                    matching_coords.append(w['bbox_px'])
+                                
+                                current_offset += w_len + 1 # +1 for space joining
+                            
+                            if matching_coords:
+                                y_min = min(c[0] for c in matching_coords)
+                                x_min = min(c[1] for c in matching_coords)
+                                y_max = max(c[2] for c in matching_coords)
+                                x_max = max(c[3] for c in matching_coords)
+                                
+                                # Create a refined "block" for this occurrence
+                                match_occurrence = block.copy()
+                                match_occurrence['bbox_px'] = [y_min, x_min, y_max, x_max]
+                                matches.append(match_occurrence)
+                            else:
+                                # Fallback to full block if word matching fails for some reason
+                                if block not in matches:
+                                    matches.append(block)
+                            
+                            start_pos = idx + 1 # Search for next occurrence
+                    else:
+                        # No word data, use the whole block
+                        matches.append(block)
             
             return matches
 

@@ -115,10 +115,12 @@ async def validate_form(
                 ))
 
         report = ValidationReport(
+            application_type=application_type,
             auto_approved=(new_report.overall_status == "verified"),
-            confidence_score=1.0 if new_report.overall_status == "verified" else 0.7,
+            confidence_score=new_report.confidence_score,
+            confidence_reason=new_report.confidence_reason,
             issues=report_issues,
-            summary=f"Audit Status: {new_report.overall_status}",
+            summary=new_report.summary or f"Audit Status: {new_report.overall_status}",
             extraction_summary=new_report.extraction_summary,
             bounding_boxes=new_report.bounding_boxes,
             citations=new_report.citations,
@@ -245,10 +247,12 @@ async def validate_form_json(request: ValidationRequest) -> ValidationReport:
                 ))
 
         report = ValidationReport(
+            application_type=request.application_type,
             auto_approved=(new_report.overall_status == "verified"),
-            confidence_score=1.0 if new_report.overall_status == "verified" else 0.7,
+            confidence_score=new_report.confidence_score,
+            confidence_reason=new_report.confidence_reason,
             issues=report_issues,
-            summary=f"Audit Status: {new_report.overall_status}",
+            summary=new_report.summary or f"Audit Status: {new_report.overall_status}",
             extraction_summary=new_report.extraction_summary,
             bounding_boxes=new_report.bounding_boxes,
             citations=new_report.citations,
