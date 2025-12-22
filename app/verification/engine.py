@@ -56,14 +56,8 @@ class VerificationEngine:
         status = "verified" if error_count == 0 else "flagged"
         if error_count > 3: status = "failed"
         
-        # Generate a descriptive summary
-        if status == "verified":
-            summary = "All mandatory fields and business rules verified successfully."
-        else:
-            summary = f"Audit flagged {error_count} errors and {warning_count} warnings. "
-            if error_count > 0:
-                top_errors = [i.message for i in failed_checks if i.severity == "error"][:2]
-                summary += f"Primary issues: {'; '.join(top_errors)}."
+        summary = None
+
 
         # Confidence reason for transparency
         confidence_reason = f"Base score {base_score:.0%} based on {passed_checks_count}/{total_checks} passed individual checks."

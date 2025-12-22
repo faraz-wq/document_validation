@@ -102,40 +102,34 @@ class GeminiExtractor:
         - For example: if the document says "Late Rajesh Kumar", extract "Rajesh Kumar".
 
         ========================
-        SOURCE DOCUMENTS
+        SOURCE DOCUMENTS (PAGE CLASSIFICATION)
         ========================
-        7. Populate "source_documents" with ALL files that contributed at least one extracted field.
-        Each entry must include:
-        - filename
-        - inferred document type/title (e.g., "Aadhaar Card", "Income Certificate", "Application Form")
-        - page_numbers: a list of page numbers (1-indexed) that correspond to this specific document type within the file.
+        8. Classify EVERY page of the provided files.
+        9. Populate "source_documents" to show which document type each page belongs to.
+        10. EVERY page number (1-indexed) across all files MUST be accounted for in this list, even if no fields were extracted from that page. Each entry must include:
+            - filename
+            - inferred document type/title (e.g., "Aadhaar Card", "Salary Slip", "Application Form")
+            - page_numbers: a list of page numbers that correspond to this specific document type within that file.
 
         ========================
         CITATIONS (MANDATORY)
         ========================
-        8. Populate the "citations" dictionary.
-        9. EVERY extracted field (including nested fields and array elements) MUST have a citation.
-        10. Use DOT NOTATION for field names, including array indices:
+        11. Populate the "citations" dictionary.
+        12. EVERY extracted field (including nested fields and array elements) MUST have a citation.
+        13. Use DOT NOTATION for field names, including array indices:
             Examples:
             - "applicant_name"
             - "income_details.total_gross_income"
             - "dependents[0].name"
-        11. Citation value format:
+        14. Citation value format:
             "Filename (Page X) - <Exact Text Snippet>"
             Provide the exact text snippet from the document that was used to extract the value.
 
         ========================
-        VALIDATION SUMMARY
-        ========================
-        12. Populate the "validation_summary" field with a VERY SHORT (one sentence) natural language summary of what is missing or incorrect based on your analysis.
-        - If everything is present and correct, set it to null.
-        - Otherwise, be direct (e.g., "The Income Certificate and Applicant Photo represent missing mandatory fields.").
-
-        ========================
         FINAL VALIDATION
         ========================
-        13. Ensure "citations" contain EXACTLY the same field keys as extracted data.
-        14. Return the final JSON object ONLY.
+        15. Ensure "citations" contain EXACTLY the same field keys as extracted data.
+        16. Return the final JSON object ONLY.
         """
 
         logger.debug(f"Prompt created with length: {len(prompt)} characters")
@@ -184,15 +178,7 @@ class GeminiExtractor:
             logger.info(f"Performing OCR for: {filename}")
             try:
                 pages_output = perform_ocr(content, mime_type)
-                
-                # Construct text representation for Gemini
-                file_text = f"\n--- File: {filename} ---\n"
-                for page in pages_output:
-                    page_num = page['page']
-                    page_text = "\n".join([block['text'] for block in page['blocks']])
-                    file_text += f"Page {page_num}:\n{page_text}\n"
-                
-                return filename, pages_output, file_text
+                return filename, pages_output
             except Exception as e:
                 logger.error(f"OCR failed for {filename}: {e}")
                 raise ExtractionError(f"OCR failed for {filename}: {str(e)}")
@@ -200,11 +186,23 @@ class GeminiExtractor:
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(files)) as executor:
             task_results = list(executor.map(ocr_task, files))
 
-        for filename, pages_output, file_text in task_results:
+        for filename, pages_output in task_results:
             ocr_results.append((filename, pages_output))
-            parts.append(file_text)
-
-        logger.info(f"Sending request to Gemini API with {len(parts)} parts")
+            
+            parts.append(f"\n--- File: {filename} ---\n")
+            for page in pages_output:
+                page_num = page['page']
+                page_text = "\n".join([block['text'] for block in page['blocks']])
+                
+                parts.append(f"Page {page_num} OCR Text:\n{page_text}")
+                
+                # Add image part for multimodal reasoning
+                parts.append(Part.from_data(
+                    data=page['image_bytes'],
+                    mime_type="image/png"
+                ))
+        
+        logger.info(f"Sending multimodal request to Gemini API with {len(parts)} parts")
         try:
             response = self.model.generate_content(
                 parts,
@@ -326,54 +324,56 @@ class GeminiExtractor:
             if len(value_norm) < 2:
                 return []
 
+            # PASS 1: Direct Substring Match (Case-Insensitive)
             for block in all_blocks:
                 block_text_norm = block['text'].lower()
-                
-                # Check for substring match
                 if value_norm in block_text_norm:
-                    # Try to refine to word-level if possible
                     words = block.get('words', [])
                     if words:
-                        # Find all occurrences in this block
                         start_pos = 0
                         while True:
                             idx = block_text_norm.find(value_norm, start_pos)
                             if idx == -1: break
                             
                             end_idx = idx + len(value_norm)
-                            
-                            # Find words that overlap with [idx, end_idx]
                             current_offset = 0
                             matching_coords = []
                             for w in words:
                                 w_len = len(w['text'])
                                 w_start = current_offset
                                 w_end = current_offset + w_len
-                                
                                 if not (w_end <= idx or w_start >= end_idx):
                                     matching_coords.append(w['bbox_px'])
-                                
-                                current_offset += w_len + 1 # +1 for space joining
+                                current_offset += w_len + 1 # space
                             
                             if matching_coords:
                                 y_min = min(c[0] for c in matching_coords)
                                 x_min = min(c[1] for c in matching_coords)
                                 y_max = max(c[2] for c in matching_coords)
                                 x_max = max(c[3] for c in matching_coords)
-                                
-                                # Create a refined "block" for this occurrence
                                 match_occurrence = block.copy()
                                 match_occurrence['bbox_px'] = [y_min, x_min, y_max, x_max]
                                 matches.append(match_occurrence)
                             else:
-                                # Fallback to full block if word matching fails for some reason
-                                if block not in matches:
-                                    matches.append(block)
-                            
-                            start_pos = idx + 1 # Search for next occurrence
+                                if block not in matches: matches.append(block)
+                            start_pos = idx + 1
                     else:
-                        # No word data, use the whole block
                         matches.append(block)
+            
+            # PASS 2: Fragmented Matching (for compound fields like addresses)
+            if not matches and len(value_norm) > 15:
+                # Split by commas or major delimiters
+                fragments = [f.strip() for f in value.split(',') if len(f.strip()) > 5]
+                if not fragments: # fallback to word chunks
+                    words_list = value.split()
+                    fragments = [" ".join(words_list[i:i+3]) for i in range(0, len(words_list), 3) if len(" ".join(words_list[i:i+3])) > 5]
+
+                for fragment in fragments:
+                    frag_norm = fragment.lower()
+                    for block in all_blocks:
+                        if frag_norm in block['text'].lower():
+                            if block not in matches:
+                                matches.append(block)
             
             return matches
 

@@ -101,7 +101,8 @@ def perform_ocr(content: bytes, mime_type: str = "application/pdf") -> List[Dict
             "page": page_num,
             "image_width": width,
             "image_height": height,
-            "blocks": blocks
+            "blocks": blocks,
+            "image_bytes": content_bytes
         }
 
     # Process pages in parallel
