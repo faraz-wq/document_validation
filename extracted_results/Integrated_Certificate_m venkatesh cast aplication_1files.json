@@ -1,17 +1,17 @@
 {
   "applicant_name": "Mandla venkatesh",
   "fathers_name": "Mandla chalapati",
-  "address": "Plot No 2276 Tarakarama Nagar Karakambadi Karakambadi ( Rural ) Chittoor Andhra Pradesh - 517520",
+  "address": "Plot No 2276 Tarakarama Nagar Karakambadi Karakambadi (Rural) Chittoor Andhra Pradesh - 517520",
   "gender": "male",
-  "age_dob": "12 / 10 / 1975",
+  "age_dob": "12/10/1975",
   "phone_number": "630165945",
   "ration_card_number": "2822160181",
   "community": "boya",
   "nativity": null,
   "family_income": null,
-  "key_details": "gov . Schens",
-  "issuer_authority": null,
-  "date_of_issue": null,
+  "key_details": "gov. Schens",
+  "issuer_authority": "గ్రామ - వార్డు సచివాలయము ఆంధ్రప్రదేశ్ ప్రభుత్వం",
+  "date_of_issue": "28/07/2017",
   "source_documents": [
     {
       "document_title": "Application Form",
@@ -28,7 +28,7 @@
       ]
     },
     {
-      "document_title": "Ration Card",
+      "document_title": "Rice Card",
       "filename": "m venkatesh cast aplication.pdf",
       "page_numbers": [
         3
@@ -43,15 +43,17 @@
     }
   ],
   "citations": {
-    "applicant_name": "m venkatesh cast aplication.pdf (Page 1) - Mandla venkatesh",
-    "fathers_name": "m venkatesh cast aplication.pdf (Page 1) - Mandla chalapati",
-    "address": "m venkatesh cast aplication.pdf (Page 2) - Plot No 2276 Tarakarama Nagar Karakambadi Karakambadi ( Rural ) Chittoor Andhra Pradesh - 517520",
-    "gender": "m venkatesh cast aplication.pdf (Page 1) - male",
-    "age_dob": "m venkatesh cast aplication.pdf (Page 1) - 12 / 10 / 1975",
+    "applicant_name": "m venkatesh cast aplication.pdf (Page 1) - Mandla venkatesh; m venkatesh cast aplication.pdf (Page 2) - Mandla Venkatesh",
+    "fathers_name": "m venkatesh cast aplication.pdf (Page 1) - Mandla chalapati; m venkatesh cast aplication.pdf (Page 2) - Mandla Chalapathi",
+    "address": "m venkatesh cast aplication.pdf (Page 2) - Plot No 2276 Tarakarama Nagar Karakambadi Karakambadi (Rural) Chittoor Andhra Pradesh - 517520",
+    "gender": "m venkatesh cast aplication.pdf (Page 1) - male; m venkatesh cast aplication.pdf (Page 2) - MALE",
+    "age_dob": "m venkatesh cast aplication.pdf (Page 1) - 12 / 10 / 1975; m venkatesh cast aplication.pdf (Page 2) - 12/10/1975",
     "phone_number": "m venkatesh cast aplication.pdf (Page 1) - 630165945",
-    "ration_card_number": "m venkatesh cast aplication.pdf (Page 1) - 2822160181",
+    "ration_card_number": "m venkatesh cast aplication.pdf (Page 1) - 2822160181; m venkatesh cast aplication.pdf (Page 3) - 2822160181",
     "community": "m venkatesh cast aplication.pdf (Page 1) - boya",
-    "key_details": "m venkatesh cast aplication.pdf (Page 1) - gov . Schens"
+    "key_details": "m venkatesh cast aplication.pdf (Page 1) - gov . Schens",
+    "issuer_authority": "m venkatesh cast aplication.pdf (Page 1) - గ్రామ - వార్డు సచివాలయము ఆంధ్రప్రదేశ్ ప్రభుత్వం",
+    "date_of_issue": "m venkatesh cast aplication.pdf (Page 2) - 28/07/2017"
   },
   "bounding_boxes": {
     "applicant_name": [
@@ -116,7 +118,7 @@
       },
       {
         "filename": "m venkatesh cast aplication.pdf",
-        "document_title": "Ration Card",
+        "document_title": "Rice Card",
         "page": 3,
         "coordinates": [
           189.3939393939394,
@@ -129,13 +131,13 @@
     "age_dob": [
       {
         "filename": "m venkatesh cast aplication.pdf",
-        "document_title": "Application Form",
-        "page": 1,
+        "document_title": "Aadhaar Card",
+        "page": 2,
         "coordinates": [
-          326.96969696969694,
-          236.47058823529412,
-          359.3939393939394,
-          408.2352941176471
+          651.5151515151515,
+          298.03921568627453,
+          663.3333333333334,
+          351.37254901960785
         ]
       }
     ],
@@ -166,7 +168,7 @@
       },
       {
         "filename": "m venkatesh cast aplication.pdf",
-        "document_title": "Ration Card",
+        "document_title": "Rice Card",
         "page": 3,
         "coordinates": [
           142.72727272727272,
@@ -200,25 +202,41 @@
         ]
       }
     ],
-    "key_details": [
+    "issuer_authority": [
       {
         "filename": "m venkatesh cast aplication.pdf",
         "document_title": "Application Form",
         "page": 1,
         "coordinates": [
-          473.93939393939394,
-          352.54901960784315,
-          521.8181818181819,
-          524.7058823529411
+          96.66666666666667,
+          297.2549019607843,
+          179.6969696969697,
+          702.7450980392157
+        ]
+      }
+    ],
+    "date_of_issue": [
+      {
+        "filename": "m venkatesh cast aplication.pdf",
+        "document_title": "Aadhaar Card",
+        "page": 2,
+        "coordinates": [
+          643.6363636363636,
+          105.09803921568628,
+          677.2727272727273,
+          112.54901960784314
         ]
       }
     ]
   },
+  "field_remarks": {
+    "community": "Sub-caste 'B.CA' also mentioned on page 1, and 'Boya' on page 4."
+  },
   "_errors": null,
-  "validation_summary": "Extraction complete. Ready for verification.",
   "_token_usage": {
-    "prompt_token_count": 5130,
-    "candidates_token_count": 730,
-    "total_token_count": 9194
-  }
+    "prompt_token_count": 5200,
+    "candidates_token_count": 971,
+    "total_token_count": 8106
+  },
+  "validation_summary": "Extraction complete. Ready for verification."
 }
