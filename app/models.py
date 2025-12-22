@@ -101,14 +101,14 @@ class IntegratedCertificateSummary(ApplicantCommon):
         default_factory=dict,
         description="Map of field names to a list of their bounding box coordinates (one for each occurrence). Use dot notation for nested fields."
     )
+    field_remarks: Dict[str, str] = Field(
+        default_factory=dict,
+        description="AI-generated notes/validation remarks for specific fields."
+    )
     errors: Optional[List[Any]] = Field(
         default_factory=list,
         alias="_errors",
         description="List of extraction errors or missing fields."
-    )
-    validation_summary: Optional[str] = Field(
-        default=None,
-        description="Natural language summary of extraction discrepancies."
     )
 
 # --- 2. Income Certificate ---
@@ -128,14 +128,14 @@ class IncomeCertificateSummary(ApplicantCommon):
         default_factory=dict,
         description="Map of field names to a list of their bounding box coordinates (one for each occurrence). Use dot notation for nested fields."
     )
+    field_remarks: Dict[str, str] = Field(
+        default_factory=dict,
+        description="AI-generated notes/validation remarks for specific fields."
+    )
     errors: Optional[List[Any]] = Field(
         default_factory=list,
         alias="_errors",
         description="List of extraction errors or missing fields."
-    )
-    validation_summary: Optional[str] = Field(
-        default=None,
-        description="Natural language summary of extraction discrepancies."
     )
 
 # --- 3. OBC Certificate ---
@@ -156,14 +156,14 @@ class OBCCertificateSummary(ApplicantCommon):
         default_factory=dict,
         description="Map of field names to a list of their bounding box coordinates (one for each occurrence). Use dot notation for nested fields."
     )
+    field_remarks: Dict[str, str] = Field(
+        default_factory=dict,
+        description="AI-generated notes/validation remarks for specific fields."
+    )
     errors: Optional[List[Any]] = Field(
         default_factory=list,
         alias="_errors",
         description="List of extraction errors or missing fields."
-    )
-    validation_summary: Optional[str] = Field(
-        default=None,
-        description="Natural language summary of extraction discrepancies."
     )
 
 # --- 4. EWS Income & Asset Certificate ---
@@ -184,14 +184,14 @@ class EWSCertificateSummary(ApplicantCommon):
         default_factory=dict,
         description="Map of field names to a list of their bounding box coordinates (one for each occurrence). Use dot notation for nested fields."
     )
+    field_remarks: Dict[str, str] = Field(
+        default_factory=dict,
+        description="AI-generated notes/validation remarks for specific fields."
+    )
     errors: Optional[List[Any]] = Field(
         default_factory=list,
         alias="_errors",
         description="List of extraction errors or missing fields."
-    )
-    validation_summary: Optional[str] = Field(
-        default=None,
-        description="Natural language summary of extraction discrepancies."
     )
 
 # --- 5. Family Member Certificate ---

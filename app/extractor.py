@@ -116,20 +116,19 @@ class GeminiExtractor:
         ========================
         11. Populate the "citations" dictionary.
         12. EVERY extracted field (including nested fields and array elements) MUST have a citation.
-        13. Use DOT NOTATION for field names, including array indices:
-            Examples:
-            - "applicant_name"
-            - "income_details.total_gross_income"
-            - "dependents[0].name"
+        13. IMPORTANT: For key verification fields (Applicant Name, DOB, Income amounts), cite ALL occurrences across ALL supporting documents (e.g. cite both the Application and the Aadhaar Card) as a list of strings.
         14. Citation value format:
             "Filename (Page X) - <Exact Text Snippet>"
             Provide the exact text snippet from the document that was used to extract the value.
 
         ========================
-        FINAL VALIDATION
+        MULTIMODAL REASONING & REMARKS
         ========================
-        15. Ensure "citations" contain EXACTLY the same field keys as extracted data.
-        16. Return the final JSON object ONLY.
+        15. Use BOTH the OCR text AND the provide page images for extraction.
+        16. Look for visual cues (stamps, signatures, photos, handwriting) in the images that OCR might miss.
+        17. Populate "field_remarks" (Dict[str, str]) with specific notes for any field where you notice discrepancies or interesting visual patterns (e.g., {{"applicant_name": "Name spelled differently on Aadhar page 3"}}).
+        18. Use DOT NOTATION for keys in "field_remarks".
+
         """
 
         logger.debug(f"Prompt created with length: {len(prompt)} characters")

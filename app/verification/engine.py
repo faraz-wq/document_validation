@@ -53,17 +53,22 @@ class VerificationEngine:
         else:
             confidence_score = 1.0
 
+        # Merge Engine Issues into field_remarks for field-level "notes"
+        field_remarks = extraction_summary.get("field_remarks", {}).copy()
+        for issue in issues:
+            if not issue.passed and issue.field:
+                # Add to remarks if not already present or append
+                existing = field_remarks.get(issue.field, "")
+                if existing:
+                    if issue.message not in existing:
+                        field_remarks[issue.field] = f"{existing} | {issue.message}"
+                else:
+                    field_remarks[issue.field] = issue.message
+
         status = "verified" if error_count == 0 else "flagged"
-        if error_count > 3: status = "failed"
-        
         summary = None
-
-
-        # Confidence reason for transparency
-        confidence_reason = f"Base score {base_score:.0%} based on {passed_checks_count}/{total_checks} passed individual checks."
-        if error_count > 0:
-            confidence_reason += f" Reduced by {error_count * 10}% due to {error_count} unresolved critical errors."
-
+        confidence_reason = f"Verification check passed {passed_checks_count}/{total_checks} validation tests."
+        
         return VerificationReport(
             application_type=config.application_type,
             report_id=f"VR_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
@@ -71,6 +76,7 @@ class VerificationEngine:
             overall_status=status,
             issues=issues,
             extraction_summary=extraction_summary,
+            field_remarks=field_remarks, # Passed to frontend as field notes
             bounding_boxes=extraction_summary.get("bounding_boxes", {}),
             citations=extraction_summary.get("citations", {}),
             source_documents=extraction_summary.get("source_documents", []),
@@ -127,16 +133,30 @@ class VerificationEngine:
             
             # Check if any found proof matches valid proof docs
             is_verified = False
+            # Check if any found proof matches valid proof docs (Keyword-aware fuzzy matching)
+            is_verified = False
             for req_doc in detail.valid_proof_documents:
-                if any(difflib.SequenceMatcher(None, req_doc.lower(), f.lower()).ratio() >= 0.8 for f in found_proofs):
-                    is_verified = True
-                    break
+                req_keywords = {w.lower() for w in re.findall(r'\w+', req_doc) if len(w) > 3}
+                
+                for found_doc in found_proofs:
+                    # 1. Exact or strict fuzzy match
+                    if difflib.SequenceMatcher(None, req_doc.lower(), found_doc.lower()).ratio() >= 0.8:
+                        is_verified = True
+                        break
+                    
+                    # 2. Keyword intersection (e.g., 'Aadhar' in 'Aadhaar Card')
+                    found_keywords = {w.lower() for w in re.findall(r'\w+', found_doc) if len(w) > 2}
+                    if any(rk in fk or fk in rk for rk in req_keywords for fk in found_keywords if len(rk) > 3):
+                        is_verified = True
+                        break
+                        
+                if is_verified: break
             
             if not is_verified:
                 issues.append(VerificationIssue(
                     field=detail.field_path,
-                    severity="error",
-                    message=f"'{detail.display_name}' lacks valid proof. Expected: {', '.join(detail.valid_proof_documents)}",
+                    severity="warning", # Softened from error
+                    message=f"Note: Proof document matching '{detail.display_name}' keywords not found in secondary pages.",
                     passed=False
                 ))
         

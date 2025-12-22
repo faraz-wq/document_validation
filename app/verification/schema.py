@@ -55,3 +55,4 @@ class VerificationReport(BaseModel):
     source_documents: List[Dict[str, Any]] = []
     
     metadata: Dict[str, Any] = {}
+    field_remarks: Dict[str, str] = {}
