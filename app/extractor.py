@@ -97,6 +97,9 @@ class GeminiExtractor:
         6. For array fields:
         - Return an empty list [] if no items are found.
         - Each array element must be fully populated according to the schema.
+        7. For person names:
+        - EXCLUDE honorifics, titles, and prefixes such as "Late", "Mr.", "Mrs.", "Ms.", "Dr.", etc. Extract only the actual name.
+        - For example: if the document says "Late Rajesh Kumar", extract "Rajesh Kumar".
 
         ========================
         SOURCE DOCUMENTS
