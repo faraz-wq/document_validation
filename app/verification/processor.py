@@ -290,10 +290,10 @@ Extract everything. Relate explicitly. Derive carefully. Validate last.
         Updates 'citation.bounding_box' in-place from list of IDs to list of [y, x, y, x] normalized to 1000.
         """
         
-        # 1. Resolve Field Entities
-        entities = ai_data.get('field_entities', [])
-        for entity in entities:
+        def resolve_entity(entity):
             citation = entity.get('citation', {})
+            if not citation: return
+            
             bbox_ids = citation.get('bounding_box', [])
             
             # If the AI returned IDs (strings), resolve them
@@ -302,12 +302,10 @@ Extract everything. Relate explicitly. Derive carefully. Validate last.
                 for bid in bbox_ids:
                     if bid in all_blocks_indexed:
                         block = all_blocks_indexed[bid]
-                        # Prefer bbox_px [y_min, x_min, y_max, x_max]
                         raw_box = None
                         if 'bbox_px' in block:
                              raw_box = block['bbox_px']
                         elif 'vertices' in block:
-                             # Vertices usually [[x,y],[x,y]...]
                              v = block['vertices']
                              if len(v) >= 4:
                                  x_coords = [p.get('x', 0) for p in v]
@@ -315,7 +313,6 @@ Extract everything. Relate explicitly. Derive carefully. Validate last.
                                  raw_box = [min(y_coords), min(x_coords), max(y_coords), max(x_coords)]
                         
                         if raw_box:
-                            # Normalize to 1000 scale using original block dimensions
                             w = block.get('width', 1)
                             h = block.get('height', 1)
                             y_min, x_min, y_max, x_max = raw_box
@@ -329,4 +326,19 @@ Extract everything. Relate explicitly. Derive carefully. Validate last.
                             resolved_boxes.append(normalized)
                 
                 citation['bounding_box'] = resolved_boxes
+
+        # 1. Resolve Field Entities
+        for entity in ai_data.get('field_entities', []):
+            resolve_entity(entity)
+            
+        # 2. Resolve Unmapped Fields (might be duplicates/different instances)
+        projection = ai_data.get('schema_projection', {})
+        for entity in projection.get('unmapped_fields', []):
+            resolve_entity(entity)
+            
+        # 3. Resolve Ordered Fields (if they contain internal entity objects - unlikely but safe)
+        for field in projection.get('ordered_fields', []):
+            # check if the AI nested an entity object (though prompt says derive_from)
+            if isinstance(field.get('value'), dict) and 'citation' in field.get('value'):
+                resolve_entity(field['value'])
 
