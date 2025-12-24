@@ -4,7 +4,7 @@ POST /validate-form - Supports both raw files and extraction summaries
 """
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request
-from typing import List, Optional, Annotated
+from typing import List, Optional, Annotated, Dict, Any
 from app.validation_models import ValidationRequest, ValidationReport, ValidationIssue
 from app.verification.engine import VerificationEngine
 from app.verification.registry import get_verification_config
@@ -19,6 +19,17 @@ router = APIRouter()
 # Initialize the NEW verification engine
 verification_engine = VerificationEngine()
 
+def _flatten_citations(citations: Dict[str, Any], parent_key: str = '', sep: str = '.') -> Dict[str, Any]:
+    """Helper to flatten nested citations for frontend compatibility."""
+    items = []
+    for k, v in citations.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, dict):
+            items.extend(_flatten_citations(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
+
 
 @router.post("/validate-form", response_model=ValidationReport)
 async def validate_form(
@@ -29,17 +40,8 @@ async def validate_form(
     extraction_session_id: Optional[str] = Form(None, description="Original session ID if validating pre-extracted data")
 ) -> ValidationReport:
     """
-    Validate a form submission - supports two modes and stores results in database.
-    
-    **Mode 1: Raw Files (Extract + Validate)**
-    - Provide `application_type` and `files`
-    - The endpoint will run OCR and VLM extraction, then validate
-    
-    **Mode 2: Pre-extracted Summary (Validate Only)**
-    - Provide `application_type` and `extraction_summary` (as JSON string)
-    - The endpoint will only validate the provided extraction
-    
-    Returns a validation report with a unique `validation_id` in metadata.
+    Validate a form submission - uses Universal Extraction Workflow.
+    Returns: Canonical Universal Extraction Response (Schema-Last).
     """
     logger.info(f"Received validation request for application_type: {application_type}")
     
@@ -100,34 +102,9 @@ async def validate_form(
                 )
         
         # Validate using the NEW Engine
+        # The Engine now returns the Canonical UniversalExtractionResponse (aliased as VerificationReport)
         logger.info("Starting NEW verification process")
-        new_report = verification_engine.verify(extraction_data, config)
-        
-        # Map to legacy ValidationReport for frontend compatibility
-        report_issues = []
-        for i in new_report.issues:
-            if not i.passed:
-                report_issues.append(ValidationIssue(
-                    field=i.field or "application",
-                    severity=i.severity,
-                    message=i.message,
-                    requires_review=(i.severity == "error")
-                ))
-
-        report = ValidationReport(
-            application_type=application_type,
-            auto_approved=(new_report.overall_status == "verified"),
-            confidence_score=new_report.confidence_score,
-            confidence_reason=new_report.confidence_reason,
-            issues=report_issues,
-            summary=new_report.summary or f"Audit Status: {new_report.overall_status}",
-            extraction_summary=new_report.extraction_summary,
-            bounding_boxes=new_report.bounding_boxes,
-            citations=new_report.citations,
-            source_documents=new_report.source_documents,
-            page_text=new_report.page_text,
-            metadata=new_report.metadata
-        )
+        report = verification_engine.verify(extraction_data, config)
         
         # Save validation session to database
         try:
@@ -147,6 +124,10 @@ async def validate_form(
             
             db = SessionLocal()
             try:
+                # Calculate counts from strict schema
+                err_c = report.validation_summary.errors
+                warn_c = report.validation_summary.warnings
+                
                 db_validation = ValidationSession(
                     validation_id=validation_id,
                     user_id=user_id,
@@ -155,11 +136,11 @@ async def validate_form(
                     application_type=application_type,
                     validation_report_json=report.dict(),
                     extraction_summary_json=extraction_data,
-                    auto_approved=report.auto_approved,
-                    confidence_score=report.confidence_score,
-                    error_count=report.metadata.get('error_count', 0),
-                    warning_count=report.metadata.get('warning_count', 0),
-                    info_count=report.metadata.get('info_count', 0)
+                    auto_approved=(err_c == 0 and warn_c == 0),
+                    confidence_score=report.validation_summary.confidence_score,
+                    error_count=err_c,
+                    warning_count=warn_c,
+                    info_count=0
                 )
                 db.add(db_validation)
                 db.commit()
@@ -182,24 +163,23 @@ async def validate_form(
             logger.error(f"Error in validation session storage: {str(e)}", exc_info=True)
             # Continue even if storage fails
         
+        # Log summary
+        summ = report.validation_summary
         logger.info(
             f"Validation completed: "
-            f"auto_approved={report.auto_approved}, "
-            f"confidence={report.confidence_score:.2f}, "
-            f"issues={len(report.issues)}"
+            f"confidence={summ.confidence_score:.2f}, "
+            f"errors={summ.errors}, warnings={summ.warnings}"
         )
         
         return report
         
     except ValueError as e:
-        # This happens when no validation rules are configured for the application type
         logger.error(f"Validation rules not found: {str(e)}")
         raise HTTPException(
             status_code=400,
             detail=str(e)
         )
     except HTTPException:
-        # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
         logger.error(f"Unexpected error during validation: {str(e)}", exc_info=True)
@@ -212,21 +192,18 @@ async def validate_form(
 @router.post("/validate-form-json", response_model=ValidationReport)
 async def validate_form_json(request: ValidationRequest) -> ValidationReport:
     """
-    Validate a form submission using JSON request body (legacy endpoint).
-    
-    This endpoint only supports pre-extracted summaries.
-    For raw file processing, use POST /validate-form with multipart/form-data.
+    Validate a form submission using JSON request body.
+    Returns: Canonical Universal Extraction Response (Schema-Last).
     """
     logger.info(f"Received JSON validation request for application_type: {request.application_type}")
     
     if not request.extraction_summary:
         raise HTTPException(
             status_code=400,
-            detail="extraction_summary is required for JSON endpoint. Use POST /validate-form with files for raw file processing."
+            detail="extraction_summary is required."
         )
     
     try:
-        # Run NEW validation
         config = get_verification_config(request.application_type)
         if not config:
             raise HTTPException(
@@ -234,45 +211,18 @@ async def validate_form_json(request: ValidationRequest) -> ValidationReport:
                 detail=f"No verification configuration found for: {request.application_type}"
             )
             
-        new_report = verification_engine.verify(request.extraction_summary, config)
+        report = verification_engine.verify(request.extraction_summary, config)
         
-        # Map to legacy ValidationReport for frontend compatibility
-        report_issues = []
-        for i in new_report.issues:
-            if not i.passed:
-                report_issues.append(ValidationIssue(
-                    field=i.field or "application",
-                    severity=i.severity,
-                    message=i.message,
-                    requires_review=(i.severity == "error")
-                ))
-
-        report = ValidationReport(
-            application_type=request.application_type,
-            auto_approved=(new_report.overall_status == "verified"),
-            confidence_score=new_report.confidence_score,
-            confidence_reason=new_report.confidence_reason,
-            issues=report_issues,
-            summary=new_report.summary or f"Audit Status: {new_report.overall_status}",
-            extraction_summary=new_report.extraction_summary,
-            bounding_boxes=new_report.bounding_boxes,
-            citations=new_report.citations,
-            source_documents=new_report.source_documents,
-            page_text=new_report.page_text,
-            metadata=new_report.metadata
-        )
-        
+        summ = report.validation_summary
         logger.info(
             f"Validation completed for {request.application_type}: "
-            f"auto_approved={report.auto_approved}, "
-            f"confidence={report.confidence_score:.2f}, "
-            f"issues={len(report.issues)}"
+            f"confidence={summ.confidence_score:.2f}, "
+            f"errors={summ.errors}"
         )
         
         return report
         
     except ValueError as e:
-        # This happens when no validation rules are configured for the application type
         logger.error(f"Validation rules not found: {str(e)}")
         raise HTTPException(
             status_code=400,

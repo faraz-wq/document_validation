@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
 from pydantic import BaseModel, Field
 
 class KeyDetailDefinition(BaseModel):
@@ -31,29 +31,84 @@ class VerificationConfig(BaseModel):
     key_details: List[KeyDetailDefinition]
     rules: List[ValidationRuleDefinition]
 
-class VerificationIssue(BaseModel):
-    field: Optional[str] = None
-    rule_id: Optional[str] = None
-    severity: str
-    message: str
-    passed: bool = False
+# --- CANONICAL SCHEMA-LAST RESPONSE MODELS ---
+
+class ValidationIssue(BaseModel):
+    """
+    Represents a validation issue (Strict Schema-Last).
+    REFERENCE ONLY schema_field and field_ids. No raw values.
+    """
+    schema_field: str = Field(description="The schema field path related to this issue")
+    severity: Literal["error", "warning"] = Field(description="Severity grade")
+    message: str = Field(description="Human-readable explanation")
+    related_field_ids: List[str] = Field(default_factory=list, description="IDs of fields involved in this issue")
+    requires_review: bool = Field(default=False)
+
+class SupportsItem(BaseModel):
+    application_field: str
+    support_type: str
+
+class ValidationRequirements(BaseModel):
+    required_proofs: List[str] = []
+    rules: List[str] = []
+
+class FieldEntity(BaseModel):
+    field_id: str
+    field_name: str
+    field_value: Optional[Any]
+    document: Dict[str, Any]  # {filename, document_type, page}
+    citation: Dict[str, Any]  # {bounding_box, text_snippet}
+    description: Optional[str] = ""
+    role: Literal["application_claim", "proof", "contextual"]
+    validation_requirements: Optional[ValidationRequirements] = None
+    supports: List[SupportsItem] = []
+    confidence: float = 0.0
+
+class FieldRelationship(BaseModel):
+    from_field_id: str
+    to_field_id: str
+    relationship: Literal["supports", "contradicts", "duplicates", "derives"]
+    confidence: float
+    reason: str
+
+class SchemaProjectionItem(BaseModel):
+    schema_field: str
+    value: Optional[Any]
+    derived_from: List[str] # List of field_ids
+    confidence: float
+    reasoning: str
+
+class SchemaProjection(BaseModel):
+    schema_name: str
+    ordered_fields: List[SchemaProjectionItem]
+    unmapped_fields: List[FieldEntity]
+
+class ValidationSummary(BaseModel):
+    """
+    Validation summary: derived metrics ONLY.
+    No summary text, no extraction completeness logic.
+    """
+    total_schema_fields: int = 0
+    validated_fields: int = 0
+    errors: int = 0
+    warnings: int = 0
+    confidence_score: float = 1.0
 
 class VerificationReport(BaseModel):
+    """
+    Canonical Response Model (Schema-Last)
+    CENTRIC ON field_entities.
+    """
     application_type: str
-    report_id: str
-    timestamp: str
-    overall_status: str # "verified", "flagged", "failed"
-    confidence_score: float = 0.0
-    summary: Optional[str] = None
-    confidence_reason: Optional[str] = None
-    issues: List[VerificationIssue]
-    
-    # NEW: Include full extraction results for frontend transparency
-    extraction_summary: Dict[str, Any] = {}
-    bounding_boxes: Dict[str, Any] = {}
-    citations: Dict[str, Any] = {}
-    source_documents: List[Dict[str, Any]] = []
-    page_text: Dict[str, str] = {} # Keyed by "filename_page"
-    
+    documents: List[Dict[str, Any]]
+    field_entities: List[FieldEntity]
+    field_relationships: List[FieldRelationship]
+    schema_projection: SchemaProjection
+    validation_summary: ValidationSummary
+    issues: List[ValidationIssue]
     metadata: Dict[str, Any] = {}
-    field_remarks: Dict[str, str] = {}
+
+# Canonical Alias
+UniversalExtractionResponse = VerificationReport
+VerificationIssue = ValidationIssue
+
