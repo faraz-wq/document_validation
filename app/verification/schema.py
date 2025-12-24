@@ -53,6 +53,7 @@ class VerificationReport(BaseModel):
     bounding_boxes: Dict[str, Any] = {}
     citations: Dict[str, Any] = {}
     source_documents: List[Dict[str, Any]] = []
+    page_text: Dict[str, str] = {} # Keyed by "filename_page"
     
     metadata: Dict[str, Any] = {}
     field_remarks: Dict[str, str] = {}

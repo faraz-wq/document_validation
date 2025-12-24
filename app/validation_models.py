@@ -41,6 +41,7 @@ class ValidationReport(BaseModel):
     bounding_boxes: Optional[Dict[str, Any]] = None
     citations: Optional[Dict[str, Any]] = None
     source_documents: Optional[List[Dict[str, Any]]] = None
+    page_text: Optional[Dict[str, str]] = None
     
     metadata: Dict[str, Any] = Field(
         default_factory=dict,

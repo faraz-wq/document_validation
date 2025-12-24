@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 
 # ==============================================================================
 # 1. COMMON NESTED MODELS (Reusable across all services for consistency)
@@ -93,7 +93,7 @@ class IntegratedCertificateSummary(ApplicantCommon):
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
     source_documents: List[SourceDocument]
-    citations: Dict[str, Optional[str]] = Field(
+    citations: Dict[str, Union[str, List[str], None]] = Field(
         default_factory=dict,
         description="Map of field names to their source (filename and page number). Use dot notation for nested fields (e.g. 'applicant_name', 'income_details.total_gross_income')."
     )
@@ -120,7 +120,7 @@ class IncomeCertificateSummary(ApplicantCommon):
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
     source_documents: List[SourceDocument]
-    citations: Dict[str, Optional[str]] = Field(
+    citations: Dict[str, Union[str, List[str], None]] = Field(
         default_factory=dict,
         description="Map of field names to their source (filename and page number). Use dot notation for nested fields."
     )
@@ -148,7 +148,7 @@ class OBCCertificateSummary(ApplicantCommon):
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
     source_documents: List[SourceDocument]
-    citations: Dict[str, Optional[str]] = Field(
+    citations: Dict[str, Union[str, List[str], None]] = Field(
         default_factory=dict,
         description="Map of field names to their source (filename and page number). Use dot notation for nested fields."
     )
@@ -176,7 +176,7 @@ class EWSCertificateSummary(ApplicantCommon):
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
     source_documents: List[SourceDocument]
-    citations: Dict[str, Optional[str]] = Field(
+    citations: Dict[str, Union[str, List[str], None]] = Field(
         default_factory=dict,
         description="Map of field names to their source (filename and page number). Use dot notation for nested fields."
     )
@@ -203,7 +203,7 @@ class FamilyMemberCertificateSummary(ApplicantCommon):
     issuer_authority: Optional[str] = None
     date_of_issue: Optional[str] = None
     source_documents: List[SourceDocument]
-    citations: Dict[str, Optional[str]] = Field(
+    citations: Dict[str, Union[str, List[str], None]] = Field(
         default_factory=dict,
         description="Map of field names to their source (filename and page number). Use dot notation for nested fields."
     )

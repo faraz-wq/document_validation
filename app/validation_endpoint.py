@@ -125,6 +125,7 @@ async def validate_form(
             bounding_boxes=new_report.bounding_boxes,
             citations=new_report.citations,
             source_documents=new_report.source_documents,
+            page_text=new_report.page_text,
             metadata=new_report.metadata
         )
         
@@ -257,6 +258,7 @@ async def validate_form_json(request: ValidationRequest) -> ValidationReport:
             bounding_boxes=new_report.bounding_boxes,
             citations=new_report.citations,
             source_documents=new_report.source_documents,
+            page_text=new_report.page_text,
             metadata=new_report.metadata
         )
         

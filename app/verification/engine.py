@@ -25,6 +25,17 @@ class VerificationEngine:
         
         issues: List[VerificationIssue] = []
         
+        # 0. Ingest AI-identified errors (Validation notes from the 4-step AI workflow)
+        ai_errors = extraction_summary.get("_errors", [])
+        for err in ai_errors:
+            if isinstance(err, dict):
+                issues.append(VerificationIssue(
+                    field=err.get("field"),
+                    severity=err.get("severity", "error"),
+                    message=err.get("message", "AI detected an issue"),
+                    passed=False
+                ))
+
         # 1. Verify Key Details (Mandatory checks + Proof checks)
         for detail in config.key_details:
             detail_issues = self._verify_key_detail(extraction_summary, detail)
@@ -57,16 +68,32 @@ class VerificationEngine:
         field_remarks = extraction_summary.get("field_remarks", {}).copy()
         for issue in issues:
             if not issue.passed and issue.field:
-                # Add to remarks if not already present or append
+                msg = issue.message
+                # Clean up "Note:" or "Note: Note:" prefixing
+                if msg.startswith("Note:"):
+                    msg = msg[5:].strip()
+                if msg.startswith("Note:"): # Double prefix
+                    msg = msg[5:].strip()
+                
                 existing = field_remarks.get(issue.field, "")
                 if existing:
-                    if issue.message not in existing:
-                        field_remarks[issue.field] = f"{existing} | {issue.message}"
+                    # Deduplicate common phrases
+                    if msg.lower() not in existing.lower():
+                        field_remarks[issue.field] = f"{existing} | {msg}"
                 else:
-                    field_remarks[issue.field] = issue.message
+                    field_remarks[issue.field] = f"Note: {msg}"
 
         status = "verified" if error_count == 0 else "flagged"
-        summary = None
+        
+        # Build dynamic summary
+        if error_count == 0 and warning_count == 0:
+            summary = f"Successfully verified {total_checks} data points across all source documents."
+        else:
+            inconsistency_count = len([i for i in failed_checks if any(kw in i.message.lower() for kw in ["mismatch", "consistent", "variation", "different"])])
+            summary = f"Validation found {error_count} errors and {warning_count} warnings."
+            if inconsistency_count > 0:
+                summary += f" {inconsistency_count} cross-document inconsistencies were detected."
+            
         confidence_reason = f"Verification check passed {passed_checks_count}/{total_checks} validation tests."
         
         return VerificationReport(
@@ -80,6 +107,7 @@ class VerificationEngine:
             bounding_boxes=extraction_summary.get("bounding_boxes", {}),
             citations=extraction_summary.get("citations", {}),
             source_documents=extraction_summary.get("source_documents", []),
+            page_text=extraction_summary.get("page_text", {}),
             confidence_score=round(confidence_score, 2),
             summary=summary,
             confidence_reason=confidence_reason,
@@ -109,54 +137,76 @@ class VerificationEngine:
 
         # B. Proof Coverage Check
         if value and detail.valid_proof_documents:
-            citations = summary.get("citations", {})
-            source_docs = summary.get("source_documents", [])
-            
-            # Map of (file, page) -> doc_type
-            doc_map = {}
-            for doc in source_docs:
-                fname = doc.get("filename")
-                dtype = doc.get("document_title")
-                for p in doc.get("page_numbers", []):
-                    doc_map[(fname, p)] = dtype
-            
-            # Find which docs proved THIS field
+            # We use bounding_boxes as the primary source for proof verification 
+            # because they are already resolved to pages and have document_title attached.
+            bboxes = summary.get("bounding_boxes", {}).get(detail.field_path, [])
             found_proofs = set()
-            field_cites = self._get_citations_for_field(citations, detail.field_path)
             
-            for cite in field_cites:
-                match = re.search(r"^(.*?) \(Page (\d+)\)", cite)
-                if match:
-                    fname, pnum = match.group(1), int(match.group(2))
-                    dtype = doc_map.get((fname, pnum))
-                    if dtype: found_proofs.add(dtype)
+            for box in bboxes:
+                # Document title and type (AI provides title in bounding box resolution)
+                title = box.get("document_title")
+                if title:
+                    found_proofs.add(title)
             
-            # Check if any found proof matches valid proof docs
-            is_verified = False
-            # Check if any found proof matches valid proof docs (Keyword-aware fuzzy matching)
+            # Fallback: Check citations if bounding boxes are missing or incomplete
+            if not found_proofs:
+                citations = summary.get("citations", {})
+                field_cites = self._get_citations_for_field(citations, detail.field_path)
+                source_docs = summary.get("source_documents", [])
+                doc_map = {}
+                for doc in source_docs:
+                    fname = doc.get("filename")
+                    dtype = doc.get("document_title") or doc.get("document_type")
+                    pnums = doc.get("page_numbers", [])
+                    if isinstance(pnums, (int, str)): pnums = [pnums]
+                    for p in pnums:
+                        doc_map[(fname, int(p))] = dtype
+                
+                for cite in field_cites:
+                    match = re.search(r"^(.*?) \(Page (\d+)\)", cite)
+                    if match:
+                        fname, pnum = match.group(1), int(match.group(2))
+                        dtype = doc_map.get((fname, pnum))
+                        if dtype: found_proofs.add(dtype)
+
+            # Check if any found proof matches valid proof docs (Fuzzy + Keyword)
             is_verified = False
             for req_doc in detail.valid_proof_documents:
+                req_doc_lower = req_doc.lower()
                 req_keywords = {w.lower() for w in re.findall(r'\w+', req_doc) if len(w) > 3}
                 
                 for found_doc in found_proofs:
-                    # 1. Exact or strict fuzzy match
-                    if difflib.SequenceMatcher(None, req_doc.lower(), found_doc.lower()).ratio() >= 0.8:
+                    found_doc_lower = found_doc.lower()
+                    # 1. Direct fuzzy match
+                    if difflib.SequenceMatcher(None, req_doc_lower, found_doc_lower).ratio() >= 0.7:
                         is_verified = True
                         break
                     
-                    # 2. Keyword intersection (e.g., 'Aadhar' in 'Aadhaar Card')
+                    # 2. Keyword intersection (e.g., 'Aadhar' vs 'Aadhaar')
                     found_keywords = {w.lower() for w in re.findall(r'\w+', found_doc) if len(w) > 2}
-                    if any(rk in fk or fk in rk for rk in req_keywords for fk in found_keywords if len(rk) > 3):
+                    # Substring check for keywords to handle spelling variations like Aadhar/Aadhaar
+                    if any(rk[:5] in fk or fk[:5] in rk for rk in req_keywords for fk in found_keywords if len(rk) >= 5 and len(fk) >= 5):
+                        is_verified = True
+                        break
+                    if any(rk in found_doc_lower for rk in req_keywords if len(rk) > 3):
                         is_verified = True
                         break
                         
                 if is_verified: break
             
             if not is_verified:
+                # Check if we found ANY proof, just not the RIGHT proof
+                proof_list = ", ".join(list(found_proofs)[:3])
+                msg = f"Note: Valid proof (e.g. {', '.join(detail.valid_proof_documents[:2])}) not found."
+                if found_proofs:
+                    msg += f" Found '{proof_list}' instead."
+                else:
+                    msg += " No supporting documentation identified for this field."
+                
                 issues.append(VerificationIssue(
                     field=detail.field_path,
-                    severity="warning", # Softened from error
-                    message=f"Note: Proof document matching '{detail.display_name}' keywords not found in secondary pages.",
+                    severity="warning",
+                    message=msg,
                     passed=False
                 ))
         

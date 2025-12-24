@@ -35,6 +35,7 @@ class VerificationProcessor:
         
         # 1. Parallel OCR Phase
         all_blocks_indexed = {}
+        all_page_texts = {}
         file_texts = []
         
         def ocr_and_index(file_idx, file_data):
@@ -48,13 +49,17 @@ class VerificationProcessor:
                 
                 txt = f"\n### FILE {file_idx}: {filename} ###\n"
                 local_blocks = {}
+                local_page_texts = {}
+                
                 for p_idx, page in enumerate(pages_output, start=1):
                     pnum = page['page']
                     txt += f"\n[PAGE {pnum}]\n"
+                    page_content = ""
                     for b_idx, block in enumerate(page['blocks']):
                         # Structured key: F{file}_P{page}_B{block}
                         bid = f"F{file_idx}P{pnum}B{b_idx}"
                         txt += f"[{bid}] {block['text']}\n"
+                        page_content += f"{block['text']}\n"
                         local_blocks[bid] = {
                             **block,
                             'page': pnum,
@@ -62,17 +67,20 @@ class VerificationProcessor:
                             'width': page['image_width'],
                             'height': page['image_height']
                         }
-                return txt, local_blocks
+                    local_page_texts[f"{filename}_page_{pnum}"] = page_content
+                    
+                return txt, local_blocks, local_page_texts
             except Exception as e:
                 logger.error(f"OCR failed for {filename}: {e}")
-                return f"\n[ERROR OCRing {filename}]\n", {}
+                return f"\n[ERROR OCRing {filename}]\n", {}, {}
 
         with ThreadPoolExecutor(max_workers=min(len(files), 5)) as executor:
             futures = [executor.submit(ocr_and_index, i, f) for i, f in enumerate(files, start=1)]
             for f in futures:
-                txt, blocks = f.result()
+                txt, blocks, p_texts = f.result()
                 file_texts.append(txt)
                 all_blocks_indexed.update(blocks)
+                all_page_texts.update(p_texts)
 
         # 2. Build Dynamic Prompt
         prompt = self._build_prompt(config)
@@ -107,6 +115,8 @@ class VerificationProcessor:
         
         if hasattr(response, 'usage_metadata'):
             result['_token_usage'] = {'total_token_count': response.usage_metadata.total_token_count}
+        
+        result['page_text'] = all_page_texts
         
         save_record("extraction_final", result, f"final_{app_type}")
         return result
@@ -156,38 +166,82 @@ class VerificationProcessor:
         fields_str = "\n".join([f"- {d.field_path}: {d.description} (Proof docs: {', '.join(d.valid_proof_documents)})" for d in config.key_details])
         
         return f"""
-        Extract the following KEY DETAILS from the provided document blocks.
+        Extract and validate document data based on the following 4-step workflow.
         
-        TARGET FIELDS:
+        TARGET SCHEMA (Fields to extract):
         {fields_str}
         
-        RULES:
-        1. Every page must be classified in 'source_documents' array with filename, document_title, and page_numbers.
-        2. ENTITY IDENTIFICATION: In 'document_title', specify the owner if applicable (e.g., "Aadhaar Card - [Name]").
-        3. Identify EXACT text segments for each field.
-        4. SPATIAL PRECISION: For each field, provide the structured block IDs (e.g., ["F1P3B12", "F1P3B13"]) in a separate object called '_block_ids_mapping'. 
-           ONLY include blocks that directly contain the value. The IDs MUST match the text markers exactly.
-        5. If a field is not found, set its value to null. DO NOT guess.
-        6. Provide citations for every field in a 'citations' object matching the field paths.
-        7. Note any inconsistencies (e.g. name mismatch between documents) in an '_errors' array.
+        STEP 1: DOCUMENT RECOGNITION (Per Page)
+        Examine every page thoroughly. Identify the document type (e.g., Aadhaar Card, Passport, Application Form, Salary Slip).
+        Populate the 'source_documents' array for EVERY page. Cross-reference with the 'Proof docs' list below to ensure you use standard names (e.g., use "Aadhaar Card" if it matches).
+        
+        STEP 2: EXTRACTION & SPATIAL MAPPING
+        - For each TARGET FIELD, search for values across ALL pages. Capture even if the value repeats.
+        - Capture the EXACT text segments.
+        - BUILD BOUNDING BOXES: Provide the structured block IDs (e.g., ["F1P1B1"]) for EVERY occurrence of the value found. 
+          If you find the applicant name on the Application Form AND the Aadhaar Card, you MUST include block IDs from BOTH pages.
+        
+        STEP 3: CROSS-PAGE CONSISTENCY ANALYSIS
+        - Compare values for the same field (e.g., Name, Date of Birth, ID Number) found across different pages and documents.
+        - Identify ANY inconsistencies, spelling variations, or mismatches.
+        - If the extracted value differs across documents, use the most "authoritative" one for the main JSON field, but list the mismatch in '_errors'.
+        
+        STEP 4: SCHEMA & LOGIC VALIDATION
+        - Take the TARGET SCHEMA and validate the results.
+        - Note any missing mandatory fields.
+        - Verify if the provided documents satisfy the 'Proof docs' requirements for each field.
         
         OUTPUT FORMAT:
-        Return ONLY valid JSON matching the field paths. Include:
-        - All extracted fields
-        - 'source_documents': [{{ "filename": "...", "document_title": "...", "page_numbers": [...] }}]
-        - 'citations': {{ "field_path": "Filename (Page X) - <Text>", ... }}
-        - '_block_ids_mapping': {{ "field_path": ["F#P#B#", "F#P#B#"], ... }}
-        - '_errors': [{{ "field": "...", "message": "..." }}]
+        Return ONLY valid JSON:
+        {{
+          "app_type": "{config.application_type}",
+          ... all fields from TARGET SCHEMA ...,
+          "source_documents": [
+            {{ 
+              "filename": "...", 
+              "document_title": "...", 
+              "page_numbers": [...],
+              "document_type": "...",
+              "summary": "Short description of what is on this page"
+            }}
+          ],
+          "citations": {{ "field_path": ["Filename (Page X) - <Text>", ...], ... }},
+          "_block_ids_mapping": {{ "field_path": ["F1P1B1", ...], ... }},
+          "_errors": [
+            {{ 
+              "field": "field_path", 
+              "message": "Detailed explanation of mismatch or validation failure", 
+              "severity": "error|warning",
+              "type": "inconsistency|missing|format|invalid_proof"
+            }}
+          ]
+        }}
         """
 
     def _resolve_boxes(self, data, indexed_blocks, mapping, source_docs) -> Dict[str, List[Dict[str, Any]]]:
         resolved = {}
         
-        # Map pnum to doc_title
+        # Normalize filenames for robust matching
+        def norm_fn(fn):
+            if not fn: return ""
+            return os.path.basename(str(fn)).lower()
+
+        # Map (filename, pnum) to best available title/type
         doc_map = {}
         for d in source_docs:
-            for p in d.get('page_numbers', []):
-                doc_map[(d.get('filename'), p)] = d.get('document_title')
+            fname = norm_fn(d.get('filename'))
+            title = d.get('document_title') or d.get('document_type') or "Unknown Document"
+            pnums = d.get('page_numbers', [])
+            if isinstance(pnums, (int, str)): pnums = [pnums]
+            for p in pnums:
+                try:
+                    pnum = int(p)
+                    doc_map[(fname, pnum)] = title
+                    # Fallback for when AI omits filename in source_documents
+                    if "" not in doc_map or pnum not in [k[1] for k in doc_map if k[0] == ""]:
+                        doc_map[("", pnum)] = title
+                except:
+                    continue
 
         def get_all_paths(obj, current_path=""):
             paths = []
@@ -213,14 +267,26 @@ class VerificationProcessor:
             for bid in bids:
                 if bid in indexed_blocks:
                     block = indexed_blocks[bid]
+                    fn = norm_fn(block['filename'])
+                    pn = int(block['page'])
+                    
+                    # Try exact match (normalized filename + page)
+                    title = doc_map.get((fn, pn))
+                    
+                    # Try wildcard match (any filename + page)
+                    if not title:
+                        title = doc_map.get(("", pn))
+                    
+                    # Last resort fallback if still not found
+                    if not title: title = "Unknown Document"
+                    
                     boxes.append({
                         "filename": block['filename'],
-                        "page": block['page'],
+                        "page": pn,
                         "coordinates": block['bbox_px'],
-                        "document_title": doc_map.get((block['filename'], block['page']), "Unknown")
+                        "document_title": title
                     })
             
-            if boxes:
                 resolved[path] = boxes
                 
         return resolved
