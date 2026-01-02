@@ -30,7 +30,6 @@ class User(Base):
 
     # Relationships
     api_keys = relationship("ApiKey", back_populates="owner", cascade="all, delete-orphan")
-    schemas = relationship("SchemaDefinition", back_populates="owner", cascade="all, delete-orphan")
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
 
 
@@ -84,27 +83,6 @@ class RequestLog(Base):
     # Relationships
     api_key = relationship("ApiKey", back_populates="request_logs")
     session = relationship("Session", back_populates="request_logs")
-
-
-# ==============================================================================
-# Schema Management (Feature 2)
-# ==============================================================================
-
-class SchemaDefinition(Base):
-    """Custom extraction schemas defined by users"""
-    __tablename__ = "schema_definitions"
-
-    id = Column(Integer, primary_key=True, index=True)
-    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    name = Column(String(255), nullable=False)
-    description = Column(Text, nullable=True)
-    definition_json = Column(JSON, nullable=False)  # Stores the complete schema structure
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    is_active = Column(Boolean, default=True, nullable=False)
-
-    # Relationships
-    owner = relationship("User", back_populates="schemas")
 
 
 # ==============================================================================

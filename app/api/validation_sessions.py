@@ -4,6 +4,7 @@ API endpoints for managing and viewing validation sessions.
 
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
+from pydantic import BaseModel
 from app.db.database import SessionLocal
 from app.db.models import ValidationSession
 from app.logging_config import get_logger
@@ -212,3 +213,40 @@ async def get_validation_stats(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error getting validation stats: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get validation stats: {str(e)}")
+
+
+class FeedbackRequest(BaseModel):
+    field: str
+    type: str # 'upvote' or 'downvote'
+    text: Optional[str] = None
+
+
+@router.post("/validation-sessions/{validation_id}/feedback")
+async def submit_feedback(
+    validation_id: str,
+    feedback: FeedbackRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Submit feedback for a field in a validation session.
+    """
+    try:
+        # Verify session exists
+        session = db.query(ValidationSession).filter(
+            ValidationSession.validation_id == validation_id
+        ).first()
+        
+        if not session:
+            raise HTTPException(status_code=404, detail=f"Validation session {validation_id} not found")
+
+        # In a real app, we would save this to a Feedback table.
+        # For now, we'll just log it.
+        logger.info(f"Feedback received for session {validation_id}: {feedback.model_dump()}")
+        
+        return {"status": "success", "message": "Feedback received"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error submitting feedback for session {validation_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to submit feedback: {str(e)}")

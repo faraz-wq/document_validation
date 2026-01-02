@@ -2,90 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
-from app.db.database import get_db
-from app.db.models import Session as SessionModel, User as UserModel
+from app.db.database import get_db, SessionLocal
+from app.db.models import Session as SessionModel, User as UserModel, Document, BoundingBox, Citation
 from app.api.v1.deps import get_current_user_from_jwt
-import uuid
 from pathlib import Path, PurePath
-from typing import Dict, Any, List, Optional
-from app.db.database import SessionLocal
-from app.db.models import Session as SessionModel, Document, BoundingBox, Citation
+import uuid
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/me/sessions", tags=["v1-user-sessions"])
-
-# Response models
-class UserSessionItem(BaseModel):
-    session_id: str
-    application_type: str
-    created_at: datetime
-    file_count: int
-
-
-class UserSessionListResponse(BaseModel):
-    items: List[UserSessionItem]
-    total_count: int
-
-
-@router.get("/", response_model=UserSessionListResponse)
-def list_user_sessions(
-    current_user: UserModel = Depends(get_current_user_from_jwt),
-    limit: int = Query(50, ge=1, le=100),
-    offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
-):
-    """
-    Get list of sessions owned by the current user.
-
-    Returns a paginated list of sessions owned by the authenticated user.
-    Requires a valid JWT token in the Authorization header.
-
-    Args:
-        limit: Number of sessions to return per page. Must be between 1 and 100. Defaults to 50.
-        offset: Number of sessions to skip before starting to collect the result set. Defaults to 0.
-        current_user: The authenticated user (automatically extracted from JWT token)
-        db: Database session dependency
-
-    Returns:
-        UserSessionListResponse: A response containing a list of user sessions and the total count
-
-    Raises:
-        HTTPException: 401 if the JWT token is invalid or missing
-        HTTPException: 422 if query parameters are invalid (e.g., limit < 1 or > 100)
-    """
-    # Count total sessions for user
-    total_count = db.query(SessionModel).filter(SessionModel.user_id == current_user.id).count()
-
-    # Get sessions with pagination
-    sessions = (
-        db.query(SessionModel)
-        .filter(SessionModel.user_id == current_user.id)
-        .order_by(SessionModel.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
-
-    # Calculate file count for each session (this might require joining with Document model)
-    items = []
-    for session in sessions:
-        # Count documents for each session
-        file_count = len(session.documents) if hasattr(session, 'documents') else 0
-        items.append(
-            UserSessionItem(
-                session_id=session.session_id,
-                application_type=session.application_type,
-                created_at=session.created_at,
-                file_count=file_count
-            )
-        )
-
-    return UserSessionListResponse(items=items, total_count=total_count)
-
 
 # Response model for session details
 class SessionDetailResponse(BaseModel):
@@ -183,6 +111,7 @@ def get_user_session(
         source_documents=source_documents,
         errors=errors
     )
+
 @router.get("/{session_id}/documents/{filename}")
 def get_session_document(
     session_id: str,

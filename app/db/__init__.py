@@ -4,7 +4,7 @@ Exports commonly used database components
 """
 
 from app.db.database import engine, SessionLocal, get_db, init_db, check_db_connection
-from app.db.models import Base, User, ApiKey, RequestLog, SchemaDefinition, Session, Document, BoundingBox, Citation
+from app.db.models import Base, User, ApiKey, RequestLog, Session, Document, BoundingBox, Citation, ValidationSession
 
 __all__ = [
     # Database connection
@@ -19,9 +19,9 @@ __all__ = [
     "User",
     "ApiKey",
     "RequestLog",
-    "SchemaDefinition",
     "Session",
     "Document",
     "BoundingBox",
     "Citation",
+    "ValidationSession",
 ]
