@@ -15,6 +15,17 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/me/sessions", tags=["v1-user-sessions"])
 
+# Response model for session list item
+class SessionListItem(BaseModel):
+    session_id: str
+    application_type: str
+    created_at: datetime
+    file_count: int
+    session_type: str  # 'extraction' or 'validation'
+    confidence_score: Optional[float] = None
+    error_count: Optional[int] = None
+    warning_count: Optional[int] = None
+
 # Response model for session details
 class SessionDetailResponse(BaseModel):
     session_id: str
@@ -28,7 +39,104 @@ class SessionDetailResponse(BaseModel):
     errors: Optional[List[Any]] = []
 
 
+@router.get("", response_model=Dict[str, Any])
+def list_user_sessions(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: UserModel = Depends(get_current_user_from_jwt),
+    db: Session = Depends(get_db)
+):
+    """
+    List all sessions (extraction and validation) owned by the current user.
+
+    Returns a paginated list of sessions with summary information.
+    Sessions are ordered by creation date (newest first).
+
+    Args:
+        limit: Maximum number of sessions to return (1-100, default: 50)
+        offset: Number of sessions to skip for pagination (default: 0)
+        current_user: The authenticated user (automatically extracted from JWT token)
+        db: Database session dependency
+
+    Returns:
+        Dict containing:
+        - items: List of session summaries
+        - total_count: Total number of sessions for this user
+        - limit: The limit used
+        - offset: The offset used
+
+    Raises:
+        HTTPException: 401 if the JWT token is invalid or missing
+    """
+    from app.db.models import ValidationSession
+    
+    # Get validation sessions
+    validation_sessions_query = (
+        db.query(ValidationSession)
+        .filter(ValidationSession.user_id == current_user.id)
+    )
+    
+    # Get extraction sessions
+    extraction_sessions_query = (
+        db.query(SessionModel)
+        .filter(SessionModel.user_id == current_user.id)
+    )
+    
+    # Count totals
+    total_validation = validation_sessions_query.count()
+    total_extraction = extraction_sessions_query.count()
+    total_count = total_validation + total_extraction
+    
+    # Fetch all sessions (we'll sort and paginate in Python for simplicity)
+    validation_sessions = validation_sessions_query.all()
+    extraction_sessions = extraction_sessions_query.all()
+    
+    # Convert to list items
+    items = []
+    
+    for session in validation_sessions:
+        items.append({
+            'session_id': session.validation_id,
+            'application_type': session.application_type,
+            'created_at': session.created_at,
+            'file_count': 0,  # We don't track this directly for validation sessions
+            'session_type': 'validation',
+            'confidence_score': session.confidence_score,
+            'error_count': session.error_count,
+            'warning_count': session.warning_count
+        })
+    
+    for session in extraction_sessions:
+        # Count documents
+        doc_count = db.query(Document).filter(Document.session_id == session.session_id).count()
+        
+        items.append({
+            'session_id': session.session_id,
+            'application_type': session.application_type,
+            'created_at': session.created_at,
+            'file_count': doc_count,
+            'session_type': 'extraction',
+            'confidence_score': None,
+            'error_count': None,
+            'warning_count': None
+        })
+    
+    # Sort by created_at descending
+    items.sort(key=lambda x: x['created_at'], reverse=True)
+    
+    # Apply pagination
+    paginated_items = items[offset:offset + limit]
+    
+    return {
+        'items': paginated_items,
+        'total_count': total_count,
+        'limit': limit,
+        'offset': offset
+    }
+
+
 @router.get("/{session_id}", response_model=SessionDetailResponse)
+
 def get_user_session(
     session_id: str,
     current_user: UserModel = Depends(get_current_user_from_jwt),
