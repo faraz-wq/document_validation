@@ -38,6 +38,7 @@ def health_check():
 # Include v1 auth routes
 from app.api.v1 import auth as v1_auth
 from app.api.v1 import sessions as v1_sessions
+from app.api.v1 import validation_configs as v1_validation_configs
 from app import validation_endpoint
 from app.api import validation_sessions
 
@@ -54,6 +55,7 @@ app.include_router(v1_sessions.router, prefix="/v1", tags=["v1-sessions"])
 
 app.include_router(validation_endpoint.router, tags=["validation"])
 app.include_router(validation_sessions.router, prefix="/v1", tags=["validation-sessions"])
+app.include_router(v1_validation_configs.router, prefix="/v1", tags=["validation-configs"])
 
 @app.on_event("startup")
 async def startup_event():
