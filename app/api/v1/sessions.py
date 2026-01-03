@@ -38,11 +38,12 @@ def get_user_session(
     Get a specific session owned by the current user.
 
     Retrieves detailed information about a specific session owned by the authenticated user.
+    Supports both regular extraction sessions and validation sessions.
     Only returns sessions that belong to the authenticated user. If the session doesn't
     exist or doesn't belong to the user, returns a 404 error.
 
     Args:
-        session_id: Unique identifier of the session to retrieve
+        session_id: Unique identifier of the session to retrieve (can be extraction or validation session ID)
         current_user: The authenticated user (automatically extracted from JWT token)
         db: Database session dependency
 
@@ -54,14 +55,96 @@ def get_user_session(
         HTTPException: 401 if the JWT token is invalid or missing
         HTTPException: 404 if the session doesn't exist or doesn't belong to the user
     """
-    # Fetch session with relationships
+    # First check if this is a validation session
+    from app.db.models import ValidationSession
+    
+    validation_session = (
+        db.query(ValidationSession)
+        .filter(ValidationSession.validation_id == session_id)
+        .first()
+    )
+    
+    if validation_session:
+        # Verify ownership (allow None user_id for legacy sessions)
+        if validation_session.user_id is not None and validation_session.user_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # For validation sessions, return the validation report data
+        report_data = validation_session.validation_report_json or {}
+        extraction_data = validation_session.extraction_summary_json or {}
+        
+        # Get documents from the linked extraction session if available
+        document_list = []
+        bounding_boxes = {}
+        citations = {}
+        
+        if validation_session.extraction_session_id:
+            extraction_session = (
+                db.query(SessionModel)
+                .filter(SessionModel.session_id == validation_session.extraction_session_id)
+                .first()
+            )
+            
+            if extraction_session:
+                # Build document list from extraction session
+                if extraction_session.documents:
+                    for doc in extraction_session.documents:
+                        document_list.append({
+                            'filename': doc.filename,
+                            'file_path': doc.file_path,
+                            'mime_type': doc.mime_type
+                        })
+                
+                # Build bounding boxes from extraction session
+                if extraction_session.bounding_boxes:
+                    for bbox in extraction_session.bounding_boxes:
+                        if bbox.field_name not in bounding_boxes:
+                            bounding_boxes[bbox.field_name] = []
+                        
+                        bounding_boxes[bbox.field_name].append({
+                            'filename': bbox.filename,
+                            'document_title': bbox.document_title,
+                            'page': bbox.page,
+                            'coordinates': bbox.coordinates
+                        })
+                
+                # Build citations from extraction session
+                if extraction_session.citations:
+                    for citation in extraction_session.citations:
+                        citations[citation.field_name] = citation.citation
+        
+        # Extract summary from validation report
+        summary_data = report_data.get('summary', extraction_data.get('summary', {}))
+        source_documents = extraction_data.get('source_documents', [])
+        
+        # Get errors from validation report
+        issues = report_data.get('issues', [])
+        errors = [issue for issue in issues if issue.get('severity') == 'error']
+        
+        return SessionDetailResponse(
+            session_id=session_id,
+            application_type=validation_session.application_type,
+            created_at=validation_session.created_at,
+            summary=summary_data,
+            bounding_boxes=bounding_boxes,
+            citations=citations,
+            documents=document_list,
+            source_documents=source_documents,
+            errors=errors
+        )
+    
+    # Otherwise, fetch as a regular extraction session
     session = (
         db.query(SessionModel)
         .filter(SessionModel.session_id == session_id)
         .first()
     )
 
-    if session is None or session.user_id != current_user.id:
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Verify ownership (allow None user_id for legacy sessions)
+    if session.user_id is not None and session.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Session not found")
 
     # Build document list
@@ -122,25 +205,56 @@ def get_session_document(
     """
     Get a specific document from a session.
     Only allows access to documents from sessions owned by the user.
+    Checks both the session itself and any linked extraction session.
     """
-    # Verify session ownership
-    session = (
-        db.query(SessionModel)
-        .filter(SessionModel.session_id == session_id)
+    # First check if this is a validation session
+    from app.db.models import ValidationSession
+    
+    validation_session = (
+        db.query(ValidationSession)
+        .filter(ValidationSession.validation_id == session_id)
         .first()
     )
+    
+    # Determine which session(s) to check for documents
+    session_ids_to_check = [session_id]
+    
+    if validation_session:
+        # Verify ownership via validation session (allow None user_id for legacy sessions)
+        if validation_session.user_id is not None and validation_session.user_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # If there's a linked extraction session, check it too
+        if validation_session.extraction_session_id:
+            session_ids_to_check.append(validation_session.extraction_session_id)
+    else:
+        # Check if it's a regular session
+        session = (
+            db.query(SessionModel)
+            .filter(SessionModel.session_id == session_id)
+            .first()
+        )
+        
+        if session is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Verify ownership (allow None user_id for legacy sessions)
+        if session.user_id is not None and session.user_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Session not found")
 
-    if session is None or session.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    # Find document record to get the safe path
-    doc_record = (
-        db.query(Document)
-        .filter(Document.session_id == session_id, Document.filename == filename)
-        .first()
-    )
+    # Find document record in any of the relevant sessions
+    doc_record = None
+    for sid in session_ids_to_check:
+        doc_record = (
+            db.query(Document)
+            .filter(Document.session_id == sid, Document.filename == filename)
+            .first()
+        )
+        if doc_record:
+            break
 
     if not doc_record:
+        logger.error(f"Document not found: {filename} in sessions {session_ids_to_check}")
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Path to document (data/documents_v1/...)

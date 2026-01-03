@@ -69,6 +69,15 @@ async def validate_form(
                 detail=f"No verification configuration found for: {application_type}"
             )
 
+        
+        # Get user/api_key from request early for extraction session
+        user_id = None
+        api_key_id = None
+        if hasattr(request.state, 'user'):
+            user_id = request.state.user.id
+        if hasattr(request.state, 'api_key_id'):
+            api_key_id = request.state.api_key_id
+        
         # Get or create extraction summary
         if has_extraction:
             # Mode 2: Validate pre-extracted summary
@@ -90,7 +99,9 @@ async def validate_form(
                     application_type=application_type,
                     files=files,
                     config=config,
-                    combine_pdfs=True
+                    combine_pdfs=True,
+                    user_id=user_id,
+                    api_key_id=api_key_id
                 )
                 _extraction_session_id = extraction_data.get('session_id')
                 logger.info("Agnostic extraction completed successfully")
@@ -113,14 +124,6 @@ async def validate_form(
             from app.db.models import ValidationSession
             
             validation_id = str(uuid.uuid4())
-            
-            # Get user/api_key from request
-            user_id = None
-            api_key_id = None
-            if hasattr(request.state, 'user'):
-                user_id = request.state.user.id
-            if hasattr(request.state, 'api_key_id'):
-                api_key_id = request.state.api_key_id
             
             db = SessionLocal()
             try:

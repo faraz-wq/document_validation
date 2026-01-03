@@ -104,12 +104,50 @@ class VerificationProcessor:
         save_record("gemini_raw", {"response": raw_text, "app_type": app_type}, f"raw_{app_type}")
         
         try:
-            if raw_text.startswith("```json"): raw_text = raw_text[7:]
-            if raw_text.endswith("```"): raw_text = raw_text[:-3]
-            ai_data = json.loads(raw_text)
+            # Clean up markdown code blocks
+            if raw_text.startswith("```json"): 
+                raw_text = raw_text[7:]
+            elif raw_text.startswith("```"):
+                raw_text = raw_text[3:]
+            if raw_text.endswith("```"): 
+                raw_text = raw_text[:-3]
+            
+            raw_text = raw_text.strip()
+            
+            # Try to parse directly first
+            try:
+                ai_data = json.loads(raw_text)
+            except json.JSONDecodeError as e:
+                # Try to fix common JSON issues
+                logger.warning(f"Initial JSON parse failed: {e}. Attempting to fix...")
+                
+                # Fix trailing commas (common issue)
+                fixed_text = re.sub(r',(\s*[}\]])', r'\1', raw_text)
+                
+                # Try parsing again
+                try:
+                    ai_data = json.loads(fixed_text)
+                    logger.info("Successfully parsed JSON after fixing trailing commas")
+                except json.JSONDecodeError as e2:
+                    # If still failing, try to find the valid JSON portion
+                    logger.error(f"JSON parsing failed even after fixes: {e2}")
+                    logger.error(f"Error at position {e2.pos}: {raw_text[max(0, e2.pos-50):min(len(raw_text), e2.pos+50)]}")
+                    
+                    # Save the problematic response for debugging
+                    save_record("gemini_error", {
+                        "response": raw_text,
+                        "error": str(e2),
+                        "position": e2.pos,
+                        "app_type": app_type
+                    }, f"error_{app_type}")
+                    
+                    raise ValueError(f"AI returned invalid JSON: {str(e2)}")
+                    
         except Exception as e:
-            logger.error(f"Failed to parse Gemini JSON: {e}")
-            raise ValueError(f"AI returned invalid JSON: {str(e)}")
+            if not isinstance(e, ValueError):
+                logger.error(f"Failed to parse Gemini JSON: {e}")
+                raise ValueError(f"AI returned invalid JSON: {str(e)}")
+            raise
 
         # 4. Post-Process: Resolve Citations and Normalize
         # The AI returns block IDs in field_value or citations. We need to attach coordinates.
