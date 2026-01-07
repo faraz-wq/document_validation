@@ -2,6 +2,8 @@ import io
 from typing import List, Dict, Any, Union
 from google.cloud import vision
 from pdf2image import convert_from_bytes
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from google.api_core.exceptions import ServiceUnavailable, InternalServerError
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -49,8 +51,18 @@ def perform_ocr(content: bytes, mime_type: str = "application/pdf") -> List[Dict
         
         vision_image = vision.Image(content=content_bytes)
         
-        # Perform text detection
-        response = client.document_text_detection(image=vision_image)
+        
+        # Perform text detection with retry
+        @retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1, min=2, max=6),
+            retry=retry_if_exception_type((ServiceUnavailable, InternalServerError)),
+            before_sleep=lambda retry_state: logger.warning(f"Vision API call failed, retrying page {page_num}... (Attempt {retry_state.attempt_number})")
+        )
+        def detect_text_with_retry():
+            return client.document_text_detection(image=vision_image)
+
+        response = detect_text_with_retry()
         
         if response.error.message:
             raise Exception(f"Vision API Error: {response.error.message}")

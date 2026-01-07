@@ -2,12 +2,15 @@ import os
 import json
 import re
 import difflib
+import time
 from typing import List, Dict, Any, Optional
 import vertexai
 from vertexai.generative_models import GenerativeModel, Part
 from app.verification.schema import VerificationConfig, KeyDetailDefinition
 from app.ocr.google_vision import perform_ocr
 from app.utils.recorder import save_record
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from google.api_core.exceptions import ServiceUnavailable, InternalServerError
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -51,7 +54,8 @@ class VerificationProcessor:
             
             try:
                 pages_output = perform_ocr(content, mime_type)
-                save_record("ocr", {"filename": filename, "ocr_data": pages_output}, f"ocr_{filename}")
+                # RECORD RAW OCR OUTPUT (AS RETURNED BY OCR SERVICE)
+                save_record("ocr_raw", {"filename": filename, "ocr_data": pages_output}, f"ocr_{filename}")
                 
                 txt = f"\n### FILE {file_idx}: {filename} ###\n"
                 local_blocks = {}
@@ -95,13 +99,40 @@ class VerificationProcessor:
         
         # 3. AI Intelligence Phase
         logger.info(f"Sending Universal Extraction request to Gemini")
-        response = self.model.generate_content(
-            parts,
-            generation_config={"response_mime_type": "application/json", "temperature": 0.0}
+        
+        @retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1, min=4, max=10),
+            retry=retry_if_exception_type((ServiceUnavailable, InternalServerError)),
+            before_sleep=lambda retry_state: logger.warning(f"AI Extraction failed, retrying... (Attempt {retry_state.attempt_number})")
         )
+        def generate_with_retry():
+            return self.model.generate_content(
+                parts,
+                generation_config={
+                    "response_mime_type": "application/json", 
+                    "temperature": 0.0,
+                }
+            )
+
+        try:
+            response = generate_with_retry()
+        except Exception as e:
+            logger.error(f"AI Extraction failed after retries: {str(e)}")
+            raise
         
         raw_text = response.text
-        save_record("gemini_raw", {"response": raw_text, "app_type": app_type}, f"raw_{app_type}")
+        # RECORD RAW GEMINI OUTPUT
+        save_record("gemini_raw", {"raw_text": raw_text, "app_type": app_type}, f"raw_{app_type}")
+        
+        # Also save as a text file for complete raw visibility if it's large
+        try:
+            raw_log_path = os.path.join("records", "gemini_raw", f"raw_{app_type}_{int(time.time())}.txt")
+            os.makedirs(os.path.dirname(raw_log_path), exist_ok=True)
+            with open(raw_log_path, "w", encoding="utf-8") as f:
+                f.write(raw_text)
+        except Exception:
+            pass
         
         try:
             # Clean up markdown code blocks
@@ -117,6 +148,8 @@ class VerificationProcessor:
             # Try to parse directly first
             try:
                 ai_data = json.loads(raw_text)
+                # Record parsed but un-resolved outcome
+                save_record("gemini_parsed", ai_data, f"parsed_{app_type}")
             except json.JSONDecodeError as e:
                 # Try to fix common JSON issues
                 logger.warning(f"Initial JSON parse failed: {e}. Attempting to fix...")
@@ -128,6 +161,8 @@ class VerificationProcessor:
                 try:
                     ai_data = json.loads(fixed_text)
                     logger.info("Successfully parsed JSON after fixing trailing commas")
+                    # Record parsed but un-resolved outcome
+                    save_record("gemini_parsed", ai_data, f"parsed_{app_type}")
                 except json.JSONDecodeError as e2:
                     # If still failing, try to find the valid JSON portion
                     logger.error(f"JSON parsing failed even after fixes: {e2}")
@@ -210,6 +245,7 @@ Your task is to extract all possible fields first, model their relationships, an
 - Never output flat key–value maps.
 - All reasoning must be explicit via field relationships.
 - Output MUST strictly follow the response JSON schema described below.
+- BE CONCISE: Keep 'description' and 'reasoning' fields extremely short (max 1 sentence).
 - Violation of any rule is an error.
 
 🧠 Processing Stages (Must be followed in order)
@@ -222,6 +258,7 @@ Stage 2 — Schema-Agnostic Field Extraction (CORE)
 - For every page of every document, extract all detectable fields.
 - Extract duplicated, overlapping, or potentially unused fields.
 - Each extracted field MUST be emitted as an independent field entity.
+- IMPORTANT: If there are many repetitive documents (e.g. many Aadhaar cards), summarize them concisely.
 
 Stage 3 — Field Entity Construction
 - Create field entities with unique IDs (fe_xxx).

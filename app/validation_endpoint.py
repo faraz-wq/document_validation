@@ -3,13 +3,15 @@ FastAPI endpoint for form-agnostic document validation.
 POST /validate-form - Supports both raw files and extraction summaries
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request, Depends
 from typing import List, Optional, Annotated, Dict, Any
 from app.validation_models import ValidationRequest, ValidationReport, ValidationIssue
 from app.verification.engine import VerificationEngine
 from app.verification.registry import get_verification_config
 from app.services.extraction_service import get_extraction_service
 from app.logging_config import get_logger
+from app.api.v1.deps import get_current_user_from_jwt
+from app.db.models import User as UserModel
 import json
 
 logger = get_logger(__name__)
@@ -37,7 +39,8 @@ async def validate_form(
     application_type: Annotated[str, Form(..., description="Type of application service")],
     files: Optional[List[UploadFile]] = File(None, description="List of document files (optional if extraction_summary provided)"),
     extraction_summary: Optional[str] = Form(None, description="JSON string of extraction summary (optional if files provided)"),
-    extraction_session_id: Optional[str] = Form(None, description="Original session ID if validating pre-extracted data")
+    extraction_session_id: Optional[str] = Form(None, description="Original session ID if validating pre-extracted data"),
+    current_user: UserModel = Depends(get_current_user_from_jwt)
 ) -> ValidationReport:
     """
     Validate a form submission - uses Universal Extraction Workflow.
@@ -70,13 +73,9 @@ async def validate_form(
             )
 
         
-        # Get user/api_key from request early for extraction session
-        user_id = None
-        api_key_id = None
-        if hasattr(request.state, 'user'):
-            user_id = request.state.user.id
-        if hasattr(request.state, 'api_key_id'):
-            api_key_id = request.state.api_key_id
+        # Get user/api_key from dependency
+        user_id = current_user.id
+        api_key_id = None # API Key not yet supported via multipart-form
         
         # Get or create extraction summary
         if has_extraction:
