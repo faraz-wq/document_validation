@@ -81,7 +81,7 @@ class SchemaProjectionItem(BaseModel):
 class SchemaProjection(BaseModel):
     schema_name: str
     ordered_fields: List[SchemaProjectionItem]
-    unmapped_fields: List[FieldEntity]
+    unmapped_fields: List[FieldEntity] = Field(default_factory=list)
 
 class ValidationSummary(BaseModel):
     """

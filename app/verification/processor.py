@@ -151,26 +151,22 @@ class VerificationProcessor:
                 # Record parsed but un-resolved outcome
                 save_record("gemini_parsed", ai_data, f"parsed_{app_type}")
             except json.JSONDecodeError as e:
-                # Try to fix common JSON issues
-                logger.warning(f"Initial JSON parse failed: {e}. Attempting to fix...")
+                # Try to fix common JSON issues and truncated response
+                logger.warning(f"Initial JSON parse failed: {e}. Attempting to repair truncated JSON...")
                 
-                # Fix trailing commas (common issue)
-                fixed_text = re.sub(r',(\s*[}\]])', r'\1', raw_text)
+                fixed_text = self._repair_json(raw_text)
                 
-                # Try parsing again
                 try:
                     ai_data = json.loads(fixed_text)
-                    logger.info("Successfully parsed JSON after fixing trailing commas")
-                    # Record parsed but un-resolved outcome
+                    logger.info("Successfully parsed JSON after repair")
                     save_record("gemini_parsed", ai_data, f"parsed_{app_type}")
                 except json.JSONDecodeError as e2:
-                    # If still failing, try to find the valid JSON portion
-                    logger.error(f"JSON parsing failed even after fixes: {e2}")
-                    logger.error(f"Error at position {e2.pos}: {raw_text[max(0, e2.pos-50):min(len(raw_text), e2.pos+50)]}")
+                    logger.error(f"JSON parsing failed even after repair: {e2}")
+                    logger.error(f"Error at position {e2.pos}: {fixed_text[max(0, e2.pos-50):min(len(fixed_text), e2.pos+50)]}")
                     
-                    # Save the problematic response for debugging
                     save_record("gemini_error", {
                         "response": raw_text,
+                        "fixed_response": fixed_text,
                         "error": str(e2),
                         "position": e2.pos,
                         "app_type": app_type
@@ -229,23 +225,87 @@ class VerificationProcessor:
         save_record("extraction_final", ai_data, f"final_{app_type}")
         return ai_data
 
+    def _repair_json(self, text: str) -> str:
+        """
+        Attempts to repair truncated or malformed JSON by balancing braces/brackets
+        and closing open strings.
+        """
+        if not text:
+            return "{}"
+            
+        text = text.strip()
+        
+        stack = []
+        in_string = False
+        escaped = False
+        
+        fixed_chars = []
+        
+        for char in text:
+            if in_string:
+                if char == '\\' and not escaped:
+                    escaped = True
+                elif char == '"' and not escaped:
+                    in_string = False
+                else:
+                    escaped = False
+            else:
+                if char == '"':
+                    in_string = True
+                elif char == '{':
+                    stack.append('}')
+                elif char == '[':
+                    stack.append(']')
+                elif char == '}':
+                    if stack and stack[-1] == '}':
+                        stack.pop()
+                elif char == ']':
+                    if stack and stack[-1] == ']':
+                        stack.pop()
+            fixed_chars.append(char)
+            
+        fixed_text = "".join(fixed_chars)
+        
+        # Close open string
+        if in_string:
+            # If the string ends with an unclosed escape sequence (e.g., "val\),
+            # remove the backslash to make it a valid string.
+            if fixed_text.endswith('\\') and escaped:
+                fixed_text = fixed_text[:-1]
+            fixed_text += '"'
+            
+        # Remove trailing comma before closing
+        fixed_text = fixed_text.rstrip()
+        if fixed_text.endswith(','):
+            fixed_text = fixed_text[:-1]
+            
+        # Close open structures
+        while stack:
+            fixed_text += stack.pop()
+            
+        return fixed_text
+
+
+
     def _build_prompt(self, config: VerificationConfig) -> str:
-        # Prepare schema details for Stage 5
+        # Prepare schema details
         schema_json = json.dumps([d.dict() for d in config.key_details], indent=2)
         
         return f"""
 You are a document extraction and validation engine for government service applications.
-Your task is to extract all possible fields first, model their relationships, and apply schema rules only at the final stage.
+Your task is to extract fields defined in the schema, model their relationships, and validate them.
 
 🔒 Non-Negotiable Rules (Read Carefully)
-- DO NOT enforce application schema during extraction.
-- DO NOT drop fields because they are not part of the schema.
+- ONLY extract fields that are present in the provided schema or are essential for validating those fields.
+- DO NOT extract irrelevant data (e.g., generic instructions, unrelated fine print).
+- Target ONLY information that helps fulfill the required fields listed in the schema.
 - Every detected fact becomes a field entity.
-- Schema fields are derived, not extracted.
+- Schema fields are derived from these entities.
 - Never output flat key–value maps.
 - All reasoning must be explicit via field relationships.
 - Output MUST strictly follow the response JSON schema described below.
 - BE CONCISE: Keep 'description' and 'reasoning' fields extremely short (max 1 sentence).
+- If you hit token limits, prioritize completing the JSON structure over adding more fields.
 - Violation of any rule is an error.
 
 🧠 Processing Stages (Must be followed in order)
@@ -254,9 +314,9 @@ Stage 1 — Page & Document Identification
 - Assign document type (e.g., Application Form, Aadhaar Card, Rice Card).
 - Preserve filename, page number, and document role.
 
-Stage 2 — Schema-Agnostic Field Extraction (CORE)
-- For every page of every document, extract all detectable fields.
-- Extract duplicated, overlapping, or potentially unused fields.
+Stage 2 — Schema-Focused Field Extraction
+- For every page of every document, extract ONLY the fields relevant to the schema.
+- Extract fields from the Application Form ('application_claim') and supporting documents ('proof').
 - Each extracted field MUST be emitted as an independent field entity.
 - IMPORTANT: If there are many repetitive documents (e.g. many Aadhaar cards), summarize them concisely.
 
@@ -267,19 +327,20 @@ Stage 3 — Field Entity Construction
 - POPULATE 'supports' for 'proof' role: explicit list of which application field it supports.
 
 Stage 4 — Field Relationship Modeling
-- Create explicit relationships: supports, contradicts, duplicates, derives.
+- Create explicit relationships between field entities: supports, contradicts, duplicates, derives.
 
-Stage 5 — Schema Projection (FINAL STEP ONLY)
+Stage 5 — Schema Projection (FINAL STEP)
 - APPLY THIS SCHEMA: 
 {schema_json}
 - Derive schema fields from one or more field entities (using 'derived_from' list).
 - Compute final values, confidence, and reasoning.
-- Preserve unmapped fields separately.
+- DO NOT include unmapped or irrelevant fields in the final output.
 
 Stage 6 — Validation & Issues
 - Validate ONLY schema-projected fields against the schema rules.
 - Issues must reference 'schema_field' and 'related_field_ids'.
 - DO NOT OUTPUT RAW VALUES IN ISSUES.
+- If a value is missing or there is a conflict/mismatch between documents, use the phrase "unable to find" in the message. DO NOT explicitly use the word "mismatch".
 
 📦 REQUIRED OUTPUT JSON SCHEMA
 You MUST output valid JSON with exactly the following top-level keys:
@@ -288,7 +349,10 @@ You MUST output valid JSON with exactly the following top-level keys:
   "documents": [],
   "field_entities": [],
   "field_relationships": [],
-  "schema_projection": {{}},
+  "schema_projection": {{
+     "schema_name": "...",
+     "ordered_fields": []
+  }},
   "validation_summary": {{}},
   "issues": [],
   "metadata": {{}}
@@ -333,15 +397,14 @@ You MUST output valid JSON with exactly the following top-level keys:
       "confidence": 0.99,
       "reasoning": "Derived from claim validated by proof"
     }}
-  ],
-  "unmapped_fields": []
+  ]
 }}
 
 🧩 Issues Schema (Strict - No Values)
 {{
   "schema_field": "applicant.name",
   "severity": "error | warning",
-  "message": "Name mismatch between application and proof",
+  "message": "unable to find valid name in application form",
   "related_field_ids": ["fe_claim", "fe_proof"],
   "requires_review": true
 }}
@@ -356,8 +419,9 @@ You MUST output valid JSON with exactly the following top-level keys:
 }}
 
 🟢 Final Reminder
-Extract everything. Relate explicitly. Derive carefully. Validate last.
+Focus ONLY on schema fields. Avoid irrelevant data. Structure as requested.
 """
+
 
     def _resolve_citations(self, ai_data: Dict[str, Any], all_blocks_indexed: Dict[str, Any]):
         """
