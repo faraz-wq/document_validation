@@ -85,14 +85,35 @@ def list_user_sessions(
         .filter(SessionModel.user_id == current_user.id)
     )
     
-    # Count totals
-    total_validation = validation_sessions_query.count()
-    total_extraction = extraction_sessions_query.count()
-    total_count = total_validation + total_extraction
-    
-    # Fetch all sessions (we'll sort and paginate in Python for simplicity)
+    # Fetch all validation sessions first
     validation_sessions = validation_sessions_query.all()
+    
+    # Collect extraction IDs associated with validation sessions
+    linked_extraction_ids = {
+        vs.extraction_session_id 
+        for vs in validation_sessions 
+        if vs.extraction_session_id
+    }
+    
+    # Get extraction sessions query
+    extraction_sessions_query = (
+        db.query(SessionModel)
+        .filter(SessionModel.user_id == current_user.id)
+    )
+    
+    # Filter out extractions that have been validated
+    if linked_extraction_ids:
+        extraction_sessions_query = extraction_sessions_query.filter(
+            SessionModel.session_id.notin_(list(linked_extraction_ids))
+        )
+    
+    # Fetch extraction sessions
     extraction_sessions = extraction_sessions_query.all()
+    
+    # Calculate totals
+    total_validation = len(validation_sessions)
+    total_extraction = len(extraction_sessions)
+    total_count = total_validation + total_extraction
     
     # Convert to list items
     items = []
