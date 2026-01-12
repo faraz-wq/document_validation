@@ -12,8 +12,21 @@ from app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# Database URL from environment variable
+# Database URL from environment variable or construct from components
 DATABASE_URL = os.getenv("DATABASE_URL")
+
+# If DATABASE_URL is not set, construct it from individual components
+if not DATABASE_URL:
+    db_user = os.getenv("DB_USER", "postgres")
+    db_password = os.getenv("DB_PASSWORD", "postgres")
+    db_host = os.getenv("DB_HOST", "localhost")
+    db_port = os.getenv("DB_PORT", "5432")
+    db_name = os.getenv("DB_NAME", "postgres")
+    
+    # Construct the DATABASE_URL
+    DATABASE_URL = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    
+    logger.info(f"Constructed DATABASE_URL from components: {db_user}@{db_host}:{db_port}/{db_name}")
 
 # Create SQLAlchemy engine
 # For development, we use NullPool to avoid connection issues with Docker restarts

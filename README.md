@@ -245,6 +245,39 @@ Run unit tests:
 python3 -m pytest tests/
 ```
 
+## Validation Configurations
+
+The service supports flexible validation configurations for different application types. You can create custom configurations with support for **nested fields** (grouped/composite subfields).
+
+### Nested Fields Feature
+
+Nested fields allow you to define fields that contain multiple subfields, perfect for:
+- Lists of items (family members, properties, income sources)
+- Grouped related data (deceased details, asset details)
+- Repeating structures (employment history, qualifications)
+
+**Example**: The Family Member Certificate uses nested fields for the `family_members` list, with subfields for name, age, gender, relationship, and aadhaar.
+
+### Documentation
+
+- **📚 [Nested Fields Guide](docs/nested_fields_guide.md)** - Comprehensive guide with examples and best practices
+- **🚀 [API Examples](docs/nested_fields_api_examples.md)** - Ready-to-use curl commands for creating configs
+- **⚡ [Quick Reference](docs/NESTED_FIELDS_QUICK_REF.md)** - Quick lookup for common patterns
+- **📋 [Summary](docs/NESTED_FIELDS_SUMMARY.md)** - Overview of what's available and what was added
+
+### Validation Config API Endpoints
+
+All endpoints require JWT authentication:
+
+- `GET /v1/validation-configs` - List all validation configurations
+- `GET /v1/validation-configs/{application_type}` - Get a specific configuration
+- `POST /v1/validation-configs` - Create a new custom configuration
+- `PUT /v1/validation-configs/{application_type}` - Update a configuration
+- `DELETE /v1/validation-configs/{application_type}` - Delete a custom configuration
+- `GET /v1/validation-configs/{application_type}/export` - Export configuration as JSON
+
+See the [nested fields API examples](docs/nested_fields_api_examples.md) for detailed usage.
+
 ## Extending
 
 1. **Add new schemas**: Define new Pydantic models in `app/models.py`
