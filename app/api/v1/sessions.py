@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import List, Optional, Dict, Any
@@ -10,6 +10,9 @@ from app.api.v1.deps import get_current_user_from_jwt
 from pathlib import Path, PurePath
 import uuid
 from app.logging_config import get_logger
+from app.utils.gcs_storage import get_gcs_storage, is_gcs_enabled
+from google.cloud.exceptions import NotFound
+import io
 
 logger = get_logger(__name__)
 
@@ -314,6 +317,7 @@ def get_session_document(
     Get a specific document from a session.
     Only allows access to documents from sessions owned by the user.
     Checks both the session itself and any linked extraction session.
+    Supports both GCS and local file storage.
     """
     # First check if this is a validation session
     from app.db.models import ValidationSession
@@ -365,19 +369,43 @@ def get_session_document(
         logger.error(f"Document not found: {filename} in sessions {session_ids_to_check}")
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Path to document (data/documents_v1/...)
-    documents_dir = Path("data/documents_v1")
-    file_path = documents_dir / doc_record.file_path
+    # Check if using GCS storage
+    if is_gcs_enabled():
+        try:
+            gcs = get_gcs_storage()
+            
+            # Download document from GCS
+            file_content = gcs.download_document(doc_record.file_path)
+            
+            # Return as streaming response
+            return StreamingResponse(
+                io.BytesIO(file_content),
+                media_type=doc_record.mime_type or "application/pdf",
+                headers={
+                    "Content-Disposition": f'inline; filename="{doc_record.filename}"'
+                }
+            )
+            
+        except NotFound:
+            logger.error(f"File not found in GCS: {doc_record.file_path}")
+            raise HTTPException(status_code=404, detail="File not found in cloud storage")
+        except Exception as e:
+            logger.error(f"Error retrieving file from GCS: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Error retrieving file from cloud storage")
+    else:
+        # Legacy: Local file storage
+        documents_dir = Path("data/documents_v1")
+        file_path = documents_dir / doc_record.file_path
 
-    if not file_path.exists():
-        logger.error(f"File not found on disk: {file_path}")
-        raise HTTPException(status_code=404, detail="File not found on disk")
+        if not file_path.exists():
+            logger.error(f"File not found on disk: {file_path}")
+            raise HTTPException(status_code=404, detail="File not found on disk")
 
-    return FileResponse(
-        path=file_path,
-        media_type=doc_record.mime_type or "application/pdf",
-        filename=doc_record.filename
-    )
+        return FileResponse(
+            path=file_path,
+            media_type=doc_record.mime_type or "application/pdf",
+            filename=doc_record.filename
+        )
 
 
 
@@ -392,10 +420,6 @@ def create_session(
     """Create a new session and store all related data"""
     session_id = str(uuid.uuid4())
     
-    # Create directory for storing documents
-    documents_dir = Path("data/documents_v1")
-    documents_dir.mkdir(parents=True, exist_ok=True)
-
     # Create a new database session
     db = SessionLocal()
     try:
@@ -418,23 +442,51 @@ def create_session(
         )
         db.add(db_session)
 
+        # Check if GCS is enabled
+        use_gcs = is_gcs_enabled()
+        
+        if use_gcs:
+            logger.info(f"Using GCS storage for session {session_id}")
+            gcs = get_gcs_storage()
+        else:
+            logger.info(f"Using local storage for session {session_id}")
+            # Create directory for storing documents locally
+            documents_dir = Path("data/documents_v1")
+            documents_dir.mkdir(parents=True, exist_ok=True)
+
         # Insert documents
         for file_data in files:
-            # Save document file to disk
             safe_filename = PurePath(file_data['filename']).name
-            document_path = documents_dir / f"{session_id}_{safe_filename}"
+            
+            if use_gcs:
+                # Upload to GCS
+                try:
+                    gcs_path = gcs.upload_document(
+                        file_content=file_data['content'],
+                        session_id=session_id,
+                        filename=safe_filename,
+                        mime_type=file_data.get('mime_type')
+                    )
+                    file_path = gcs_path  # Store GCS path in database
+                    
+                except Exception as e:
+                    logger.error(f"Failed to upload to GCS: {e}", exc_info=True)
+                    raise Exception(f"Failed to upload document to cloud storage: {str(e)}")
+            else:
+                # Save to local disk
+                document_path = documents_dir / f"{session_id}_{safe_filename}"
+                
+                with open(document_path, 'wb') as f:
+                    f.write(file_data['content'])
+                
+                # Store the relative file path in the database
+                file_path = str(document_path.relative_to(documents_dir))
 
-            # Write the file content to disk
-            with open(document_path, 'wb') as f:
-                f.write(file_data['content'])
-
-            # Store the relative file path in the database (relative to the documents directory)
-            relative_path = str(document_path.relative_to(documents_dir))
-
+            # Create document record
             db_document = Document(
                 session_id=session_id,
                 filename=file_data['filename'],
-                file_path=relative_path,  # Store the path to the file
+                file_path=file_path,  # GCS path or local relative path
                 mime_type=file_data.get('mime_type'),
                 file_size=len(file_data['content'])
             )
@@ -473,7 +525,9 @@ def create_session(
             db.add(db_citation)
 
         db.commit()
-        logger.info(f"Created session {session_id} for {application_type}")
+        
+        storage_type = "GCS" if use_gcs else "local"
+        logger.info(f"Created session {session_id} for {application_type} using {storage_type} storage")
         return session_id
 
     except Exception as e:

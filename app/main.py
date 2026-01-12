@@ -1,5 +1,4 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import uvicorn
 import logging
@@ -18,11 +17,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-import os
-current_dir = os.path.dirname(__file__)
-parent_dir = os.path.dirname(current_dir)
-# Keep static mount for any residual file serving needs or validation artifacts
-app.mount("/static", StaticFiles(directory=os.path.join(parent_dir, "static")), name="static")
 
 # Setup logging
 setup_logging(log_level="DEBUG", log_file="logs/app.log")
