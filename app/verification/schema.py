@@ -11,6 +11,9 @@ class KeyDetailDefinition(BaseModel):
     description: str
     is_mandatory: bool = True
     valid_proof_documents: List[str] = [] # e.g. ["Aadhaar Card", "Voter ID"]
+    nested_fields: Optional[List['KeyDetailDefinition']] = None
+
+KeyDetailDefinition.model_rebuild()
 
 class ValidationRuleDefinition(BaseModel):
     """

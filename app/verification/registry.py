@@ -166,16 +166,23 @@ INCOME_CERTIFICATE_CONFIG = VerificationConfig(
             valid_proof_documents=["Application Form", "Income Certificate"]
         ),
         KeyDetailDefinition(
-            field_path="income_details.total_gross_income",
-            display_name="Annual Family Income",
-            description="Total gross annual income from all sources",
-            valid_proof_documents=["Income Certificate", "Salary Slip", "IT Returns"]
-        ),
-        KeyDetailDefinition(
-            field_path="income_details.income_sources",
-            display_name="Income Sources",
-            description="List of all income sources (salary, business, agriculture, etc.)",
-            valid_proof_documents=["Income Certificate", "Salary Slip", "IT Returns", "Application Form"]
+            field_path="income_details",
+            display_name="Income Details",
+            description="Income information of the applicant and family",
+            nested_fields=[
+                KeyDetailDefinition(
+                    field_path="total_gross_income",
+                    display_name="Annual Family Income",
+                    description="Total gross annual income from all sources",
+                    valid_proof_documents=["Income Certificate", "Salary Slip", "IT Returns"]
+                ),
+                KeyDetailDefinition(
+                    field_path="income_sources",
+                    display_name="Income Sources",
+                    description="List of all income sources (salary, business, agriculture, etc.)",
+                    valid_proof_documents=["Income Certificate", "Salary Slip", "IT Returns", "Application Form"]
+                )
+            ]
         )
     ],
     rules=[
@@ -198,7 +205,7 @@ INCOME_CERTIFICATE_CONFIG = VerificationConfig(
             description="Income must be supported by either a Salary Slip, IT Return or a certified declaration",
             severity="warning",
             rule_type="proof_existence",
-            fields_involved=["income_details.total_gross_income"]
+            fields_involved=["income_details"]
         ),
         ValidationRuleDefinition(
             rule_id="aadhaar_format",
@@ -251,16 +258,23 @@ EWS_CERTIFICATE_CONFIG = VerificationConfig(
             valid_proof_documents=["Application Form"]
         ),
         KeyDetailDefinition(
-            field_path="asset_details.gross_annual_income",
-            display_name="Gross Annual Income",
-            description="Total gross annual income of the family",
-            valid_proof_documents=["Income Certificate", "Salary Slip", "Application Form"]
-        ),
-        KeyDetailDefinition(
-            field_path="asset_details.property_details",
-            display_name="Property Details",
-            description="Details of agricultural land, residential property, and other assets",
-            valid_proof_documents=["Property Documents", "Application Form"]
+            field_path="asset_details",
+            display_name="Asset Details",
+            description="Income and property details for EWS eligibility",
+            nested_fields=[
+                KeyDetailDefinition(
+                    field_path="gross_annual_income",
+                    display_name="Gross Annual Income",
+                    description="Total gross annual income of the family",
+                    valid_proof_documents=["Income Certificate", "Salary Slip", "Application Form"]
+                ),
+                KeyDetailDefinition(
+                    field_path="property_details",
+                    display_name="Property Details",
+                    description="Details of agricultural land, residential property, and other assets",
+                    valid_proof_documents=["Property Documents", "Application Form"]
+                )
+            ]
         ),
         KeyDetailDefinition(
             field_path="community",
@@ -289,7 +303,7 @@ EWS_CERTIFICATE_CONFIG = VerificationConfig(
             description="Gross annual income must be below 8 Lakhs for EWS eligibility",
             severity="error",
             rule_type="logic",
-            fields_involved=["asset_details.gross_annual_income"]
+            fields_involved=["asset_details"]
         ),
         ValidationRuleDefinition(
             rule_id="ews_community_check",
@@ -343,34 +357,72 @@ FAMILY_MEMBER_CONFIG = VerificationConfig(
             valid_proof_documents=["Application Form"]
         ),
         KeyDetailDefinition(
-            field_path="deceased_details.deceased_hof_name",
-            display_name="Deceased Person Name",
-            description="Name of the deceased member",
-            valid_proof_documents=["Death Certificate", "Application Form", "Affidavit"]
-        ),
-        KeyDetailDefinition(
-            field_path="deceased_details.date_of_death",
-            display_name="Date of Death",
-            description="When the person passed away",
-            valid_proof_documents=["Death Certificate", "Application Form", "Affidavit"]
-        ),
-        KeyDetailDefinition(
-            field_path="deceased_details.deceased_father_husband_name",
-            display_name="Deceased's Father/Husband Name",
-            description="Father's or husband's name of the deceased person",
-            valid_proof_documents=["Death Certificate", "Application Form", "Affidavit"]
-        ),
-        KeyDetailDefinition(
-            field_path="deceased_details.deceased_aadhaar",
-            display_name="Deceased's Aadhaar Number",
-            description="Aadhaar card number of the deceased person",
-            valid_proof_documents=["Aadhaar Card", "Death Certificate"]
+            field_path="deceased_details",
+            display_name="Deceased Person Details",
+            description="Details of the deceased family member",
+            nested_fields=[
+                KeyDetailDefinition(
+                    field_path="deceased_hof_name",
+                    display_name="Deceased Person Name",
+                    description="Name of the deceased member",
+                    valid_proof_documents=["Death Certificate", "Application Form", "Affidavit"]
+                ),
+                KeyDetailDefinition(
+                    field_path="date_of_death",
+                    display_name="Date of Death",
+                    description="When the person passed away",
+                    valid_proof_documents=["Death Certificate", "Application Form", "Affidavit"]
+                ),
+                KeyDetailDefinition(
+                    field_path="deceased_father_husband_name",
+                    display_name="Deceased's Father/Husband Name",
+                    description="Father's or husband's name of the deceased person",
+                    valid_proof_documents=["Death Certificate", "Application Form", "Affidavit"]
+                ),
+                KeyDetailDefinition(
+                    field_path="deceased_aadhaar",
+                    display_name="Deceased's Aadhaar Number",
+                    description="Aadhaar card number of the deceased person",
+                    valid_proof_documents=["Aadhaar Card", "Death Certificate"]
+                )
+            ]
         ),
         KeyDetailDefinition(
             field_path="family_members",
             display_name="Family Members List",
-            description="List of all family members with their details (name, age, gender, relationship, aadhaar)",
-            valid_proof_documents=["Application Form", "Aadhaar Card", "Affidavit"]
+            description="List of all family members with their details",
+            nested_fields=[
+                KeyDetailDefinition(
+                    field_path="name",
+                    display_name="Name",
+                    description="Full name of the family member",
+                    valid_proof_documents=["Aadhaar Card", "Application Form"]
+                ),
+                KeyDetailDefinition(
+                    field_path="age",
+                    display_name="Age",
+                    description="Age of the family member",
+                    valid_proof_documents=["Aadhaar Card", "Application Form"]
+                ),
+                KeyDetailDefinition(
+                    field_path="gender",
+                    display_name="Gender",
+                    description="Gender of the family member",
+                    valid_proof_documents=["Aadhaar Card", "Application Form"]
+                ),
+                KeyDetailDefinition(
+                    field_path="relationship",
+                    display_name="Relationship",
+                    description="Relation to the applicant/deceased",
+                    valid_proof_documents=["Application Form", "Affidavit"]
+                ),
+                KeyDetailDefinition(
+                    field_path="aadhaar",
+                    display_name="Aadhaar",
+                    description="Aadhaar number of the family member",
+                    valid_proof_documents=["Aadhaar Card"]
+                )
+            ]
         ),
         KeyDetailDefinition(
             field_path="relationship_to_deceased",
@@ -392,21 +444,21 @@ FAMILY_MEMBER_CONFIG = VerificationConfig(
             description="Death details must be backed by a government-issued Death Certificate",
             severity="error",
             rule_type="proof_existence",
-            fields_involved=["deceased_details.date_of_death"]
+            fields_involved=["deceased_details"]
         ),
         ValidationRuleDefinition(
             rule_id="deceased_name_consistency",
             description="Deceased person's name must be consistent across Death Certificate, Application Form, and Affidavit",
             severity="error",
             rule_type="consistency",
-            fields_involved=["deceased_details.deceased_hof_name"]
+            fields_involved=["deceased_details"]
         ),
         ValidationRuleDefinition(
             rule_id="aadhaar_format",
             description="Aadhaar numbers must be in valid format (12 digits)",
             severity="warning",
             rule_type="format",
-            fields_involved=["applicant_aadhaar", "deceased_details.deceased_aadhaar"]
+            fields_involved=["applicant_aadhaar", "deceased_details"]
         ),
         ValidationRuleDefinition(
             rule_id="family_member_proof",

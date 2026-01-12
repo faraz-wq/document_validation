@@ -319,12 +319,23 @@ Stage 2 — Schema-Focused Field Extraction
 - Extract fields from the Application Form ('application_claim') and supporting documents ('proof').
 - Each extracted field MUST be emitted as an independent field entity.
 - IMPORTANT: If there are many repetitive documents (e.g. many Aadhaar cards), summarize them concisely.
+- **NESTED FIELDS**: If a schema field has 'nested_fields' (e.g., family_members, deceased_details):
+  * For ARRAY fields (e.g., family_members): Extract each array element as separate field entities.
+    - Use field_id pattern: fe_fm{{number}}_{{subfield}}_{{source}} (e.g., fe_fm1_name_affidavit, fe_fm2_aadhaar_aadhaar)
+    - Number starts from 1 and increments for each member
+  * For OBJECT fields (e.g., deceased_details): Extract each subfield as separate field entities.
+    - Use field_id pattern: fe_dd_{{subfield}}_{{source}} (e.g., fe_dd_deceased_hof_name_death_cert)
+  * Each nested field entity must have proper bounding_box citations
 
 Stage 3 — Field Entity Construction
 - Create field entities with unique IDs (fe_xxx).
 - Role: 'application_claim' (from Form), 'proof' (from Supporting Docs), 'contextual' (metadata).
 - POPULATE 'validation_requirements' for 'application_claim' role: list specific proofs required and validation rules (e.g. name_match).
 - POPULATE 'supports' for 'proof' role: explicit list of which application field it supports.
+- **NESTED FIELD IDs**: Follow these patterns strictly:
+  * Family members: fe_fm{{N}}_{{subfield}}_{{source}} where N is 1-based index
+  * Deceased details: fe_dd_{{subfield}}_{{source}}
+  * Income/Asset details: fe_id_{{subfield}}_{{source}} or fe_ad_{{subfield}}_{{source}}
 
 Stage 4 — Field Relationship Modeling
 - Create explicit relationships between field entities: supports, contradicts, duplicates, derives.
@@ -335,6 +346,13 @@ Stage 5 — Schema Projection (FINAL STEP)
 - Derive schema fields from one or more field entities (using 'derived_from' list).
 - Compute final values, confidence, and reasoning.
 - DO NOT include unmapped or irrelevant fields in the final output.
+- **NESTED FIELD PROJECTION**:
+  * For ARRAY fields (e.g., family_members): Return an array of objects, each with the nested_fields as keys
+    - Example: "value": [{{{{"name": "John", "age": 30, "aadhaar": "1234..."}}}}, ...]
+    - Include ALL field entity IDs in 'derived_from' (e.g., ["fe_fm1_name_affidavit", "fe_fm1_age_affidavit", "fe_fm2_name_affidavit", ...])
+  * For OBJECT fields (e.g., deceased_details): Return an object with nested_fields as keys
+    - Example: "value": {{{{"deceased_hof_name": "Jane", "date_of_death": "2024-01-01", ...}}}}
+    - Include ALL field entity IDs in 'derived_from' (e.g., ["fe_dd_deceased_hof_name_death_cert", "fe_dd_date_of_death_death_cert", ...])
 
 Stage 6 — Validation & Issues
 - Validate ONLY schema-projected fields against the schema rules.
