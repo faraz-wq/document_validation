@@ -26,13 +26,22 @@ class ExtractionService:
     ) -> Dict[str, Any]:
         """
         Processes a list of UploadFile objects, performs extraction, and saves the session.
+        Now includes file validation to prevent memory and security issues.
         """
         logger.info(f"Extracting from {len(files)} files for {application_type}")
+        
+        # 0. Validate files before processing
+        from app.utils.file_validator import file_validator
+        file_validator.validate_files(files)
         
         # 1. Read files into memory
         file_data_list = []
         for file in files:
             content = await file.read()
+            
+            # Additional validation after reading content
+            file_validator.validate_file_content(content, file.filename)
+            
             file_data_list.append({
                 "filename": file.filename,
                 "content": content,
@@ -44,7 +53,7 @@ class ExtractionService:
         if combine_pdfs:
             file_data_list = combine_pdf_and_non_pdf_files(file_data_list)
 
-        # 3. Perform Ag agnostic Extraction
+        # 3. Perform Agnostic Extraction
         try:
             result = self.processor.process(application_type, file_data_list, config)
         except Exception as e:

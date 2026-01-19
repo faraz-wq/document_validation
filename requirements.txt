@@ -70,3 +70,7 @@ typing_extensions==4.15.0
 urllib3==2.6.2
 uvicorn==0.38.0
 websockets==15.0.1
+slowapi==0.1.9
+psutil==6.1.0
+celery==5.4.0
+redis==5.2.1

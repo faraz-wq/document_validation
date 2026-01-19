@@ -45,6 +45,8 @@ async def validate_form(
     """
     Validate a form submission - uses Universal Extraction Workflow.
     Returns: Canonical Universal Extraction Response (Schema-Last).
+    
+    Now runs heavy processing in a thread pool to prevent blocking other requests.
     """
     logger.info(f"Received validation request for application_type: {application_type}")
     
@@ -79,7 +81,7 @@ async def validate_form(
         
         # Get or create extraction summary
         if has_extraction:
-            # Mode 2: Validate pre-extracted summary
+            # Mode 2: Validate pre-extracted summary (lightweight)
             logger.info("Mode: Validate pre-extracted summary")
             try:
                 extraction_data = json.loads(extraction_summary)
@@ -88,35 +90,73 @@ async def validate_form(
                     status_code=400,
                     detail=f"Invalid JSON in extraction_summary: {str(e)}"
                 )
-        else:
-            # Mode 1: Extract from files then validate (AGNOSTIC EXTRACTION)
-            logger.info(f"Mode: Extract from {len(files)} files guides by {application_type} rules")
-            extraction_service = get_extraction_service()
             
-            try:
-                extraction_data = await extraction_service.extract_from_upload_files(
-                    application_type=application_type,
-                    files=files,
-                    config=config,
-                    combine_pdfs=True,
-                    user_id=user_id,
-                    api_key_id=api_key_id
-                )
-                _extraction_session_id = extraction_data.get('session_id')
-                logger.info("Agnostic extraction completed successfully")
-            except Exception as e:
-                logger.error(f"Extraction failed: {str(e)}", exc_info=True)
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"AI Extraction failed: {str(e)}"
+            # Run validation in thread pool to prevent blocking
+            import asyncio
+            from concurrent.futures import ThreadPoolExecutor
+            
+            loop = asyncio.get_event_loop()
+            
+            def run_validation():
+                """Run validation in a separate thread"""
+                return verification_engine.verify(extraction_data, config)
+            
+            # Execute in thread pool
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                report = await loop.run_in_executor(executor, run_validation)
+        else:
+            # Mode 1: Extract from files then validate (HEAVY PROCESSING)
+            logger.info(f"Mode: Extract from {len(files)} files guided by {application_type} rules")
+            
+            # Run extraction and validation in thread pool to prevent blocking
+            import asyncio
+            from concurrent.futures import ThreadPoolExecutor
+            
+            loop = asyncio.get_event_loop()
+            
+            def run_extraction_and_validation():
+                """Run extraction and validation in a separate thread"""
+                # Import here to avoid issues with async context
+                from app.services.extraction_service import get_extraction_service
+                import asyncio
+                
+                # Create a new event loop for this thread
+                thread_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(thread_loop)
+                
+                try:
+                    extraction_service = get_extraction_service()
+                    
+                    # Run the async extraction in this thread's event loop
+                    extraction_data = thread_loop.run_until_complete(
+                        extraction_service.extract_from_upload_files(
+                            application_type=application_type,
+                            files=files,
+                            config=config,
+                            combine_pdfs=True,
+                            user_id=user_id,
+                            api_key_id=api_key_id
+                        )
+                    )
+                    
+                    session_id = extraction_data.get('session_id')
+                    logger.info(f"Agnostic extraction completed successfully, session: {session_id}")
+                    
+                    # Run validation
+                    report = verification_engine.verify(extraction_data, config)
+                    
+                    return report, extraction_data, session_id
+                finally:
+                    thread_loop.close()
+            
+            # Execute in thread pool (this prevents blocking the main event loop)
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                report, extraction_data, _extraction_session_id = await loop.run_in_executor(
+                    executor, 
+                    run_extraction_and_validation
                 )
         
-        # Validate using the NEW Engine
-        # The Engine now returns the Canonical UniversalExtractionResponse (aliased as VerificationReport)
-        logger.info("Starting NEW verification process")
-        report = verification_engine.verify(extraction_data, config)
-        
-        # Save validation session to database
+        # Save validation session to database (quick operation, can stay in main thread)
         try:
             import uuid
             from app.db.database import SessionLocal
@@ -137,7 +177,7 @@ async def validate_form(
                     extraction_session_id=_extraction_session_id,
                     application_type=application_type,
                     validation_report_json=report.dict(),
-                    extraction_summary_json=extraction_data,
+                    extraction_summary_json=extraction_data if has_extraction else {},
                     auto_approved=(err_c == 0 and warn_c == 0),
                     confidence_score=report.validation_summary.confidence_score,
                     error_count=err_c,
