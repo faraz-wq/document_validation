@@ -1,6 +1,6 @@
 # Document Validation Service
 
-This service uses Google Vertex AI (Gemini 1.5 Pro) to extract structured data from uploaded documents for various application types.
+This service uses Google Vertex AI to extract structured data from uploaded documents for various application types.
 
 ## Features
 
@@ -16,7 +16,7 @@ This service uses Google Vertex AI (Gemini 1.5 Pro) to extract structured data f
 document_validation/
 ├── app/                    # FastAPI backend
 │   ├── main.py            # API endpoints
-│   ├── extractor.py       # Gemini extraction logic
+│   ├── extractor.py       # AI extraction logic
 │   ├── models.py          # Pydantic schemas
 │   └── logging_config.py  # Logging setup
 ├── frontend/              # React frontend
@@ -90,11 +90,11 @@ cd frontend
 npm run dev
 ```
 
-The React app will be available at `http://localhost:3000`.
+The React app will be available at `http://localhost:8080`.
 
 ## Using the Application
 
-1. Open `http://localhost:3000` in your browser
+1. Open `http://localhost:8080` in your browser
 2. Select an application type from the dropdown
 3. Upload a document (PDF, JPG, or PNG) via drag & drop or file browser
 4. Click "Validate Document" to process
