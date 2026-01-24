@@ -1,0 +1,8 @@
+__pycache__
+venv
+.git
+.pytest_cache
+extracted_results
+logs
+*.pyc
+.env
