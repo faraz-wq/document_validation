@@ -35,11 +35,15 @@ class GCSStorage:
         if self.documents_prefix and not self.documents_prefix.endswith('/'):
             self.documents_prefix += '/'
         
-        # Initialize GCS client
-        self.client = storage.Client()
-        self.bucket = self.client.bucket(self.bucket_name)
-        
-        logger.info(f"GCS Storage initialized: bucket={self.bucket_name}, prefix={self.documents_prefix}")
+        try:
+            # Initialize GCS client
+            self.client = storage.Client()
+            self.bucket = self.client.bucket(self.bucket_name)
+            
+            logger.info(f"GCS Storage initialized: bucket={self.bucket_name}, prefix={self.documents_prefix}")
+        except Exception as e:
+            logger.error(f"Failed to initialize GCS client: {e}", exc_info=True)
+            raise ValueError(f"Failed to initialize GCS storage: {str(e)}")
     
     def upload_document(
         self, 
@@ -225,20 +229,26 @@ class GCSStorage:
 _gcs_storage: Optional[GCSStorage] = None
 
 
-def get_gcs_storage() -> GCSStorage:
+def get_gcs_storage() -> Optional[GCSStorage]:
     """
     Get or create the GCS storage singleton instance.
     
     Returns:
-        GCSStorage instance
-    
-    Raises:
-        ValueError: If GCS_BUCKET_NAME is not configured
+        GCSStorage instance if GCS is enabled, None otherwise
     """
     global _gcs_storage
     
+    # If GCS is not enabled, return None
+    if not is_gcs_enabled():
+        logger.info("GCS storage is not enabled (GCS_BUCKET_NAME not set)")
+        return None
+    
     if _gcs_storage is None:
-        _gcs_storage = GCSStorage()
+        try:
+            _gcs_storage = GCSStorage()
+        except Exception as e:
+            logger.error(f"Failed to initialize GCS storage: {e}", exc_info=True)
+            return None
     
     return _gcs_storage
 
