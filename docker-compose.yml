@@ -35,7 +35,7 @@ services:
       context: ./data-extraction-hub
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "8081:8081"
     environment:
       - VITE_API_BASE_URL=${VITE_API_BASE_URL}
       - TZ=${TZ}

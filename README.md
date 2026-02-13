@@ -90,11 +90,11 @@ cd frontend
 npm run dev
 ```
 
-The React app will be available at `http://localhost:8080`.
+The React app will be available at `http://localhost:8081`.
 
 ## Using the Application
 
-1. Open `http://localhost:8080` in your browser
+1. Open `http://localhost:8081` in your browser
 2. Select an application type from the dropdown
 3. Upload a document (PDF, JPG, or PNG) via drag & drop or file browser
 4. Click "Validate Document" to process

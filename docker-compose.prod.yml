@@ -1,0 +1,28 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env.docker
+    volumes:
+      - ./service-account-credentials.json:/app/service-account-credentials.json:ro
+    restart: unless-stopped
+    networks:
+      - docval-network
+
+  frontend:
+    build:
+      context: ./data-extraction-hub
+      dockerfile: Dockerfile.prod
+    ports:
+      - "8000:8000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - docval-network
+
+networks:
+  docval-network:
+    driver: bridge
